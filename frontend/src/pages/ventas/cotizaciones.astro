@@ -1,0 +1,53 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Cotizaciones">
+  <Sidebar slot="sidebar" />
+  <div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+      <h1>Cotizaciones</h1>
+      <button id="btn-nueva" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nueva cotización</button>
+    </div>
+    <div id="lista">Cargando...</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  async function load() {
+    try {
+      const res = await fetch(`${API}/api/cotizaciones`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error('Error al cargar')
+      const data = await res.json()
+      const el = document.getElementById('lista')
+      if (!data.length) { el.textContent = 'No hay cotizaciones registradas.'; return }
+      el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+        <thead style="background:#f1f5f9;"><tr>
+          <th style="padding:.75rem 1rem;text-align:left;">#</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Cliente</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
+          <th style="padding:.75rem 1rem;text-align:right;">Total estimado</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Vencimiento</th>
+        </tr></thead>
+        <tbody>${data.map(c => `<tr style="border-top:1px solid #e2e8f0;">
+          <td style="padding:.75rem 1rem;">${c.id}</td>
+          <td style="padding:.75rem 1rem;">${c.cliente?.name ?? '—'}</td>
+          <td style="padding:.75rem 1rem;">
+            <span style="background:${c.estado==='Aprobado'?'#d1fae5':c.estado==='Rechazado'?'#fee2e2':'#fef9c3'};
+                         color:${c.estado==='Aprobado'?'#065f46':c.estado==='Rechazado'?'#991b1b':'#854d0e'};
+                         padding:2px 8px;border-radius:12px;font-size:.8rem;">${c.estado}</span>
+          </td>
+          <td style="padding:.75rem 1rem;text-align:right;font-weight:600;">S/ ${c.totalEstimado}</td>
+          <td style="padding:.75rem 1rem;">${new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`
+    } catch(e) {
+      document.getElementById('lista').textContent = 'Error al cargar cotizaciones.'
+    }
+  }
+  load()
+</script>

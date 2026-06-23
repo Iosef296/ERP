@@ -7,7 +7,9 @@
       </button>
     </div>
 
-    <div v-if="loading">Cargando...</div>
+    <div v-if="error" style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;margin-bottom:1rem;">{{ error }}</div>
+    <div v-if="loading" style="padding:2rem;text-align:center;color:#6b7280;">Cargando trabajadores...</div>
+    <div v-else-if="!workers.length && !error" style="padding:2rem;text-align:center;color:#6b7280;">No hay trabajadores registrados.</div>
 
     <table v-else style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
       <thead style="background:#f1f5f9;">
@@ -46,6 +48,7 @@
     <div v-if="showForm" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;">
       <div style="background:#fff;padding:2rem;border-radius:12px;width:500px;max-height:90vh;overflow-y:auto;">
         <h2 style="margin-bottom:1rem;">Nuevo trabajador</h2>
+        <div v-if="formError" style="background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;">{{ formError }}</div>
         <form @submit.prevent="createWorker">
           <div v-for="field in fields" :key="field.key" style="margin-bottom:.75rem;">
             <label style="display:block;font-size:.85rem;margin-bottom:.25rem;">{{ field.label }}</label>
@@ -53,8 +56,10 @@
               style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;" />
           </div>
           <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
-            <button type="button" @click="showForm = false" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
-            <button type="submit" style="background:#2563eb;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+            <button type="button" @click="showForm = false; formError = ''" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+            <button type="submit" :disabled="saving" style="background:#2563eb;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">
+              {{ saving ? 'Guardando...' : 'Guardar' }}
+            </button>
           </div>
         </form>
       </div>
@@ -70,7 +75,10 @@ const token = () => localStorage.getItem('token')
 
 const workers = ref([])
 const loading = ref(true)
+const error = ref('')
 const showForm = ref(false)
+const formError = ref('')
+const saving = ref(false)
 const form = ref({})
 
 const fields = [
@@ -87,26 +95,49 @@ const fields = [
 ]
 
 async function fetchWorkers() {
-  const res = await fetch(`${API}/api/workers`, { headers: { Authorization: `Bearer ${token()}` } })
-  workers.value = await res.json()
-  loading.value = false
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await fetch(`${API}/api/workers`, { headers: { Authorization: `Bearer ${token()}` } })
+    if (!res.ok) throw new Error('Error al cargar trabajadores')
+    workers.value = await res.json()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
 }
 
 async function createWorker() {
-  await fetch(`${API}/api/workers`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-    body: JSON.stringify(form.value)
-  })
-  form.value = {}
-  showForm.value = false
-  fetchWorkers()
+  saving.value = true
+  formError.value = ''
+  try {
+    const res = await fetch(`${API}/api/workers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify(form.value)
+    })
+    const data = await res.json()
+    if (!res.ok) { formError.value = data.error ?? 'Error al guardar'; return }
+    form.value = {}
+    showForm.value = false
+    fetchWorkers()
+  } catch {
+    formError.value = 'Error de conexión'
+  } finally {
+    saving.value = false
+  }
 }
 
 async function deleteWorker(id) {
   if (!confirm('¿Eliminar trabajador?')) return
-  await fetch(`${API}/api/workers/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
-  fetchWorkers()
+  try {
+    const res = await fetch(`${API}/api/workers/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    if (!res.ok) throw new Error('Error al eliminar')
+    fetchWorkers()
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 onMounted(fetchWorkers)

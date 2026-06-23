@@ -20,7 +20,7 @@ import Sidebar from '../../components/Sidebar.astro'
   if (!token) window.location.href = '/login'
 
   fetch(`${API}/api/ventas`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.json())
+    .then(r => { if (!r.ok) throw new Error('Error al cargar ventas'); return r.json() })
     .then(ventas => {
       const el = document.getElementById('ventas-list')
       if (!ventas.length) { el.textContent = 'No hay ventas registradas.'; return }
@@ -41,4 +41,5 @@ import Sidebar from '../../components/Sidebar.astro'
         </tr>`).join('')}</tbody>
       </table>`
     })
+    .catch(e => { document.getElementById('ventas-list').textContent = e.message })
 </script>

@@ -23,9 +23,16 @@ import Sidebar from '../../components/Sidebar.astro'
   if (!token) window.location.href = '/login'
 
   async function loadSection(section) {
-    const res = await fetch(`${API}/api/control/${section}`, { headers: { Authorization: `Bearer ${token}` } })
-    const data = await res.json()
-    document.getElementById('content').innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
+    const el = document.getElementById('content')
+    el.textContent = 'Cargando...'
+    try {
+      const res = await fetch(`${API}/api/control/${section}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`Error al cargar ${section}`)
+      const data = await res.json()
+      el.innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
+    } catch (e) {
+      el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
+    }
   }
   window.loadSection = loadSection
   loadSection('indicadores')

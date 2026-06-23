@@ -7,3 +7,4 @@ import InventoryList from '../../components/vue/InventoryList.vue'
   <Sidebar slot="sidebar" />
   <InventoryList client:load />
 </App>
+<script>if (!localStorage.getItem('token')) window.location.href = '/login'</script>

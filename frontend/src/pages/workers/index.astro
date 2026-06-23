@@ -7,3 +7,4 @@ import WorkerList from '../../components/vue/WorkerList.vue'
   <Sidebar slot="sidebar" />
   <WorkerList client:load />
 </App>
+<script>if (!localStorage.getItem('token')) window.location.href = '/login'</script>

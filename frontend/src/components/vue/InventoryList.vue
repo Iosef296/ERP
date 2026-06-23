@@ -7,9 +7,14 @@
       </button>
     </div>
 
-    <input v-model="search" placeholder="Buscar..." style="padding:.5rem;border:1px solid #ddd;border-radius:6px;width:300px;margin-bottom:1rem;" />
+    <div v-if="error" style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;margin-bottom:1rem;">{{ error }}</div>
 
-    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+    <input v-model="search" placeholder="Buscar por nombre o SKU..." style="padding:.5rem;border:1px solid #ddd;border-radius:6px;width:300px;margin-bottom:1rem;" />
+
+    <div v-if="loading" style="padding:2rem;text-align:center;color:#6b7280;">Cargando inventario...</div>
+    <div v-else-if="!products.length && !error" style="padding:2rem;text-align:center;color:#6b7280;">No hay productos registrados.</div>
+
+    <table v-else style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
       <thead style="background:#f1f5f9;">
         <tr>
           <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
@@ -35,14 +40,17 @@
     <div v-if="showForm" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;">
       <div style="background:#fff;padding:2rem;border-radius:12px;width:420px;">
         <h2 style="margin-bottom:1rem;">Nuevo producto</h2>
+        <div v-if="formError" style="background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;">{{ formError }}</div>
         <form @submit.prevent="createProduct">
           <input v-model="form.name" placeholder="Nombre" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:.5rem;" />
           <input v-model="form.sku" placeholder="SKU" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:.5rem;" />
-          <input v-model.number="form.price" placeholder="Precio" type="number" step="0.01" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:.5rem;" />
-          <input v-model.number="form.stock" placeholder="Stock inicial" type="number" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:1rem;" />
+          <input v-model.number="form.price" placeholder="Precio" type="number" step="0.01" min="0" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:.5rem;" />
+          <input v-model.number="form.stock" placeholder="Stock inicial" type="number" min="0" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-bottom:1rem;" />
           <div style="display:flex;gap:.5rem;justify-content:flex-end;">
-            <button type="button" @click="showForm = false" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
-            <button type="submit" style="background:#8b5cf6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+            <button type="button" @click="showForm = false; formError = ''" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+            <button type="submit" :disabled="saving" style="background:#8b5cf6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">
+              {{ saving ? 'Guardando...' : 'Guardar' }}
+            </button>
           </div>
         </form>
       </div>
@@ -59,26 +67,52 @@ const token = () => localStorage.getItem('token')
 const products = ref([])
 const search = ref('')
 const showForm = ref(false)
+const formError = ref('')
+const error = ref('')
+const loading = ref(true)
+const saving = ref(false)
 const form = ref({})
 
 const filtered = computed(() =>
-  products.value.filter(p => p.name.toLowerCase().includes(search.value.toLowerCase()) || p.sku.includes(search.value))
+  products.value.filter(p =>
+    p.name.toLowerCase().includes(search.value.toLowerCase()) ||
+    p.sku.toLowerCase().includes(search.value.toLowerCase())
+  )
 )
 
 async function fetchProducts() {
-  const res = await fetch(`${API}/api/inventario/products`, { headers: { Authorization: `Bearer ${token()}` } })
-  products.value = await res.json()
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await fetch(`${API}/api/inventario/products`, { headers: { Authorization: `Bearer ${token()}` } })
+    if (!res.ok) throw new Error('Error al cargar inventario')
+    products.value = await res.json()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
 }
 
 async function createProduct() {
-  await fetch(`${API}/api/inventario/products`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-    body: JSON.stringify(form.value)
-  })
-  form.value = {}
-  showForm.value = false
-  fetchProducts()
+  saving.value = true
+  formError.value = ''
+  try {
+    const res = await fetch(`${API}/api/inventario/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify(form.value)
+    })
+    const data = await res.json()
+    if (!res.ok) { formError.value = data.error ?? 'Error al guardar'; return }
+    form.value = {}
+    showForm.value = false
+    fetchProducts()
+  } catch {
+    formError.value = 'Error de conexión'
+  } finally {
+    saving.value = false
+  }
 }
 
 onMounted(fetchProducts)
