@@ -1,0 +1,32 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Control General">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Control General</h1>
+    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+      <button onclick="loadSection('indicadores')" style="background:#84cc16;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">KPIs</button>
+      <button onclick="loadSection('planes')" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Plan estratégico</button>
+      <button onclick="loadSection('auditorias')" style="background:#f59e0b;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Auditorías</button>
+      <button onclick="loadSection('calidad')" style="background:#10b981;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Control calidad</button>
+      <button onclick="loadSection('gastos')" style="background:#ef4444;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Gastos operativos</button>
+    </div>
+    <div id="content">Selecciona una sección.</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  async function loadSection(section) {
+    const res = await fetch(`${API}/api/control/${section}`, { headers: { Authorization: `Bearer ${token}` } })
+    const data = await res.json()
+    document.getElementById('content').innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
+  }
+  window.loadSection = loadSection
+  loadSection('indicadores')
+</script>

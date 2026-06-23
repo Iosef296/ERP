@@ -1,0 +1,7 @@
+---
+// Redirect to dashboard or login
+---
+<script>
+  const token = localStorage.getItem('token')
+  window.location.href = token ? '/dashboard' : '/login'
+</script>

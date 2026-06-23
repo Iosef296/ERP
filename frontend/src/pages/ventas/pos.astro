@@ -1,0 +1,9 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+import POS from '../../components/vue/POS.vue'
+---
+<App title="POS">
+  <Sidebar slot="sidebar" />
+  <POS client:load />
+</App>

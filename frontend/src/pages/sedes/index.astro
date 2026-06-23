@@ -1,0 +1,39 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Sedes">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Sedes</h1>
+    <div id="sedes-list">Cargando...</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  fetch(`${API}/api/sedes`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.json())
+    .then(sedes => {
+      document.getElementById('sedes-list').innerHTML = `
+        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+          <thead style="background:#f1f5f9;"><tr>
+            <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+            <th style="padding:.75rem 1rem;text-align:left;">Ciudad</th>
+            <th style="padding:.75rem 1rem;text-align:left;">Tipo</th>
+            <th style="padding:.75rem 1rem;text-align:left;">Encargado</th>
+            <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
+          </tr></thead>
+          <tbody>${sedes.map(s => `<tr style="border-top:1px solid #e2e8f0;">
+            <td style="padding:.75rem 1rem;font-weight:600;">${s.nombre}</td>
+            <td style="padding:.75rem 1rem;">${s.ciudad}, ${s.departamento}</td>
+            <td style="padding:.75rem 1rem;">${s.tipo}</td>
+            <td style="padding:.75rem 1rem;">${s.encargado ?? '—'}</td>
+            <td style="padding:.75rem 1rem;">${s.estado}</td>
+          </tr>`).join('')}</tbody>
+        </table>`
+    })
+</script>

@@ -1,0 +1,35 @@
+---
+import App from '../layouts/App.astro'
+import Sidebar from '../components/Sidebar.astro'
+---
+<App title="Dashboard">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Dashboard</h1>
+    <div id="cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;"></div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  const modules = [
+    { label: 'Trabajadores', href: '/workers', color: '#3b82f6' },
+    { label: 'Ventas', href: '/ventas', color: '#10b981' },
+    { label: 'POS', href: '/ventas/pos', color: '#f59e0b' },
+    { label: 'Inventario', href: '/inventario', color: '#8b5cf6' },
+    { label: 'Producción', href: '/produccion', color: '#ef4444' },
+    { label: 'Tienda', href: '/store', color: '#06b6d4' },
+    { label: 'Control General', href: '/control', color: '#84cc16' },
+  ]
+
+  const container = document.getElementById('cards')
+  modules.forEach(m => {
+    container.innerHTML += `
+      <a href="${m.href}" style="background:${m.color};color:#fff;padding:1.5rem;border-radius:10px;text-decoration:none;font-weight:600;font-size:1.1rem;display:block;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        ${m.label}
+      </a>`
+  })
+</script>

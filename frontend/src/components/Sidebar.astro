@@ -1,0 +1,32 @@
+---
+const links = [
+  { href: '/dashboard',          label: 'Dashboard' },
+  { href: '/workers',            label: 'Trabajadores' },
+  { href: '/roles',              label: 'Roles' },
+  { href: '/sedes',              label: 'Sedes' },
+  { href: '/inventario',         label: 'Inventario' },
+  { href: '/ventas',             label: 'Ventas' },
+  { href: '/ventas/pos',         label: 'POS' },
+  { href: '/ventas/cotizaciones',label: 'Cotizaciones' },
+  { href: '/produccion',         label: 'Producción' },
+  { href: '/store',              label: 'Tienda' },
+  { href: '/control',            label: 'Control General' },
+]
+---
+<nav style="width:220px;background:#1a1a2e;height:100vh;padding:1.5rem 0;position:sticky;top:0;">
+  <div style="color:#fff;font-weight:700;font-size:1.2rem;padding:0 1.5rem 1.5rem;">Ruashka ERP</div>
+  {links.map(l => (
+    <a href={l.href} style="display:block;padding:.6rem 1.5rem;color:#aab4c8;text-decoration:none;font-size:.9rem;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='transparent'">
+      {l.label}
+    </a>
+  ))}
+  <button id="logout-btn" style="margin:2rem 1.5rem 0;background:#e74c3c;color:#fff;border:none;padding:.6rem 1rem;border-radius:6px;cursor:pointer;width:calc(100% - 3rem);">
+    Cerrar sesión
+  </button>
+</nav>
+<script>
+  document.getElementById('logout-btn')?.addEventListener('click', () => {
+    localStorage.removeItem('token')
+    window.location.href = '/login'
+  })
+</script>

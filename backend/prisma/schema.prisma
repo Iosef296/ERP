@@ -1,0 +1,590 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+
+model User {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  password        String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  ventaCabeceras    VentaCabecera[]
+  storePersonnel    StorePersonnel[]
+  storeAccessLogs   StoreAccessLog[]
+}
+
+// ─── RRHH ────────────────────────────────────────────────────────────────────
+
+model Role {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  codigo        String   @unique
+  descripcion   String?
+  nivel         String   // basico, intermedio, avanzado, administrador
+  permisos      Json?
+  usuariosCount Int      @default(0)
+  departamento  String?
+  estado        String   @default("activo")
+  observaciones String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workers          Worker[]
+  ordenesProduccion OrdenProduccion[]
+}
+
+model Sede {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  codigo        String   @unique
+  direccion     String
+  ciudad        String
+  departamento  String
+  telefono      String
+  email         String?
+  encargado     String?
+  capacidad     Int      @default(0)
+  tipo          String   // central, regional, sucursal
+  estado        String   @default("activa")
+  observaciones String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workers        Worker[]
+  indicadores    Indicador[]
+  auditorias     Auditoria[]
+  controlCalidad ControlCalidad[]
+  gastoOperativo GastoOperativo[]
+}
+
+model Worker {
+  id              Int      @id @default(autoincrement())
+  nombre          String
+  dni             String   @unique
+  email           String   @unique
+  telefono        String
+  fechaNacimiento DateTime @db.Date
+  genero          String
+  direccion       String?
+  cargo           String
+  fechaIngreso    DateTime @db.Date
+  salario         Decimal  @db.Decimal(10, 2)
+  tipoContrato    String
+  estado          String   @default("activo")
+  observaciones   String?
+  roleId          Int?
+  sedeId          Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  role Role? @relation(fields: [roleId], references: [id])
+  sede Sede? @relation(fields: [sedeId], references: [id])
+}
+
+// ─── INVENTARIO ───────────────────────────────────────────────────────────────
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id         Int      @id @default(autoincrement())
+  name       String
+  sku        String   @unique
+  price      Decimal  @db.Decimal(10, 2)
+  stock      Decimal  @default(0) @db.Decimal(10, 2)
+  categoryId Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+}
+
+// ─── VENTAS ───────────────────────────────────────────────────────────────────
+
+model Producto {
+  id             Int      @id @default(autoincrement())
+  name           String
+  sku            String   @unique
+  barcode        String?
+  unitOfMeasure  String   // metros, yardas, piezas
+  price          Decimal  @db.Decimal(10, 2)
+  stockQuantity  Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ventaDetalles       VentaDetalle[]
+  cotizacionDetalles  CotizacionDetalle[]
+}
+
+model Cliente {
+  id             Int      @id @default(autoincrement())
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  documentNumber String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ventaCabeceras      VentaCabecera[]
+  cotizacionCabeceras CotizacionCabecera[]
+}
+
+model VentaCabecera {
+  id          Int      @id @default(autoincrement())
+  clienteId   Int
+  userId      Int
+  sede        String   @default("Main Branch")
+  total       Decimal  @db.Decimal(10, 2)
+  fechaVenta  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cliente       Cliente        @relation(fields: [clienteId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  detalles      VentaDetalle[]
+  pagos         Pago[]
+}
+
+model VentaDetalle {
+  id               Int     @id @default(autoincrement())
+  ventaCabeceraId  Int
+  productoId       Int
+  cantidad         Decimal @db.Decimal(10, 2)
+  precioUnitario   Decimal @db.Decimal(10, 2)
+  subtotal         Decimal @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ventaCabecera VentaCabecera @relation(fields: [ventaCabeceraId], references: [id], onDelete: Cascade)
+  producto      Producto      @relation(fields: [productoId], references: [id])
+}
+
+model Pago {
+  id               Int      @id @default(autoincrement())
+  ventaCabeceraId  Int
+  monto            Decimal  @db.Decimal(10, 2)
+  metodoPago       String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ventaCabecera VentaCabecera @relation(fields: [ventaCabeceraId], references: [id], onDelete: Cascade)
+}
+
+model CotizacionCabecera {
+  id              Int      @id @default(autoincrement())
+  clienteId       Int
+  fechaVencimiento DateTime @db.Date
+  totalEstimado   Decimal  @db.Decimal(10, 2)
+  estado          String   @default("Borrador")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cliente  Cliente             @relation(fields: [clienteId], references: [id])
+  detalles CotizacionDetalle[]
+}
+
+model CotizacionDetalle {
+  id                    Int      @id @default(autoincrement())
+  cotizacionCabeceraId  Int
+  productoId            Int
+  cantidad              Decimal  @db.Decimal(10, 2)
+  especificacionesTecnicas String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  cotizacionCabecera CotizacionCabecera @relation(fields: [cotizacionCabeceraId], references: [id], onDelete: Cascade)
+  producto           Producto           @relation(fields: [productoId], references: [id])
+}
+
+// ─── PRODUCCIÓN (dev-cristofer) ───────────────────────────────────────────────
+
+model Proyeccion {
+  id          Int    @id @default(autoincrement())
+  nombre      String
+  descripcion String
+  tipo        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrdenProduccion {
+  id              Int      @id @default(autoincrement())
+  fechaInicio     DateTime @db.Date
+  fechaFinal      DateTime @db.Date
+  cantidad        Int
+  estado          String
+  tipoProducto    String
+  rolId           Int
+  descripcion     String?
+  responsable     String?
+  observaciones   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  role        Role          @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  materias    MateriaPrima[]
+}
+
+model Proveedor {
+  id         Int      @id @default(autoincrement())
+  nombre     String
+  ruc        String
+  rubro      String
+  telefono   String
+  direccion  String
+  materiaId  Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  materia MateriaPrima? @relation(fields: [materiaId], references: [id])
+}
+
+model MateriaPrima {
+  id           Int      @id @default(autoincrement())
+  nombre       String
+  descripcion  String
+  unidadMedida String
+  stock        Int
+  ordenId      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orden      OrdenProduccion @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  proveedores Proveedor[]
+}
+
+// ─── ADMINISTRACIÓN DE TIENDA (joaquin) ──────────────────────────────────────
+
+model Store {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String?
+  phone       String?
+  managerName String?
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  storeRoles          StoreRole[]
+  personnel           StorePersonnel[]
+  shifts              StoreShift[]
+  attendance          StoreAttendance[]
+  machines            StoreMachine[]
+  maintenance         StoreMaintenance[]
+  machineFaults       StoreMachineFault[]
+  documents           StoreDocument[]
+  incidents           StoreIncident[]
+  requests            StoreRequest[]
+  accessLogs          StoreAccessLog[]
+  notices             StoreNotice[]
+  internalMessages    StoreInternalMessage[]
+}
+
+model StoreRole {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  name        String
+  permissions Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store     Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  personnel StorePersonnelRole[]
+}
+
+model StorePersonnel {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  userId    Int?
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  hireDate  DateTime? @db.Date
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store             Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user              User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roles             StorePersonnelRole[]
+  attendance        StoreAttendance[]
+  maintenances      StoreMaintenance[]     @relation("PerformedBy")
+  faultsReported    StoreMachineFault[]    @relation("FaultReportedBy")
+  incidents         StoreIncident[]        @relation("IncidentReportedBy")
+  requests          StoreRequest[]
+  noticesCreated    StoreNotice[]          @relation("NoticeCreatedBy")
+  messagesSent      StoreInternalMessage[] @relation("MessageSender")
+  messagesReceived  StoreInternalMessage[] @relation("MessageRecipient")
+}
+
+model StorePersonnelRole {
+  id               Int      @id @default(autoincrement())
+  storePersonnelId Int
+  storeRoleId      Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  personnel StorePersonnel @relation(fields: [storePersonnelId], references: [id], onDelete: Cascade)
+  role      StoreRole      @relation(fields: [storeRoleId], references: [id], onDelete: Cascade)
+}
+
+model StoreShift {
+  id         Int      @id @default(autoincrement())
+  storeId    Int
+  name       String
+  startTime  String
+  endTime    String
+  daysOfWeek Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model StoreAttendance {
+  id               Int      @id @default(autoincrement())
+  storeId          Int
+  storePersonnelId Int
+  date             DateTime @db.Date
+  checkIn          String?
+  checkOut         String?
+  status           String   @default("present")
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  personnel StorePersonnel @relation(fields: [storePersonnelId], references: [id], onDelete: Cascade)
+}
+
+model StoreMachine {
+  id              Int       @id @default(autoincrement())
+  storeId         Int
+  name            String
+  serialNumber    String?
+  status          String    @default("operational")
+  lastMaintenance DateTime? @db.Date
+  nextMaintenance DateTime? @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store        Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  maintenances StoreMaintenance[]
+  faults       StoreMachineFault[]
+}
+
+model StoreMaintenance {
+  id              Int      @id @default(autoincrement())
+  storeId         Int
+  storeMachineId  Int
+  scheduledDate   DateTime @db.Date
+  type            String
+  description     String?
+  status          String   @default("pending")
+  performedById   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  machine     StoreMachine    @relation(fields: [storeMachineId], references: [id], onDelete: Cascade)
+  performedBy StorePersonnel? @relation("PerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+}
+
+model StoreMachineFault {
+  id             Int       @id @default(autoincrement())
+  storeId        Int
+  storeMachineId Int
+  reportedAt     DateTime
+  reportedById   Int?
+  description    String
+  priority       String    @default("medium")
+  status         String    @default("open")
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  store      Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  machine    StoreMachine    @relation(fields: [storeMachineId], references: [id], onDelete: Cascade)
+  reportedBy StorePersonnel? @relation("FaultReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+}
+
+model StoreDocument {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  title       String
+  category    String?
+  filePath    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model StoreIncident {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  title       String
+  description String
+  occurredAt  DateTime
+  severity    String   @default("low")
+  reportedById Int?
+  status      String   @default("open")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store      Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  reportedBy StorePersonnel? @relation("IncidentReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+}
+
+model StoreRequest {
+  id            Int      @id @default(autoincrement())
+  storeId       Int
+  requesterId   Int
+  type          String
+  details       String
+  status        String   @default("pending")
+  adminResponse String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  requester StorePersonnel @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+}
+
+model StoreAccessLog {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  userId    Int?
+  action    String
+  ipAddress String?
+  details   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model StoreNotice {
+  id          Int       @id @default(autoincrement())
+  storeId     Int
+  title       String
+  content     String
+  priority    String    @default("normal")
+  expiresAt   DateTime?
+  createdById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdBy StorePersonnel? @relation("NoticeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+model StoreInternalMessage {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  senderId    Int
+  recipientId Int?
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sender    StorePersonnel  @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient StorePersonnel? @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+// ─── CONTROL GENERAL (Michael) ────────────────────────────────────────────────
+
+model Indicador {
+  id                   Int      @id @default(autoincrement())
+  tipo                 String
+  descripcion          String
+  metas                String
+  valorActual          String
+  porcentajeCumplimiento Decimal @db.Decimal(5, 2)
+  fechaActual          DateTime @db.Date
+  sedeId               Int?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  sede Sede? @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+}
+
+model PlanEstrategico {
+  id           Int      @id @default(autoincrement())
+  nombre       String
+  objetivos    String
+  fechaInicio  DateTime @db.Date
+  fechaFinal   DateTime @db.Date
+  estado       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  justificaciones Justificacion[]
+}
+
+model Justificacion {
+  id                 Int      @id @default(autoincrement())
+  asunto             String
+  descripcion        String
+  planEstrategicoId  Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  planEstrategico PlanEstrategico? @relation(fields: [planEstrategicoId], references: [id], onDelete: SetNull)
+}
+
+model Auditoria {
+  id            Int      @id @default(autoincrement())
+  fecha         DateTime @db.Date
+  area          String
+  resultado     String
+  observaciones String?
+  sedeId        Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sede Sede? @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+}
+
+model ControlCalidad {
+  id            Int      @id @default(autoincrement())
+  fechaControl  DateTime @db.Date
+  resultado     String
+  sedeId        Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sede Sede? @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+}
+
+model GastoOperativo {
+  id          Int      @id @default(autoincrement())
+  categoria   String
+  desembolso  Decimal  @db.Decimal(10, 2)
+  sedeId      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sede Sede? @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+}

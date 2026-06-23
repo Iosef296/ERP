@@ -1,0 +1,31 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Producción">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Producción</h1>
+    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+      <button onclick="loadSection('ordenes')" style="background:#ef4444;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Órdenes</button>
+      <button onclick="loadSection('materias')" style="background:#f59e0b;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Materia prima</button>
+      <button onclick="loadSection('proveedores')" style="background:#8b5cf6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Proveedores</button>
+      <button onclick="loadSection('proyecciones')" style="background:#06b6d4;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Proyecciones</button>
+    </div>
+    <div id="content">Selecciona una sección.</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  async function loadSection(section) {
+    const res = await fetch(`${API}/api/produccion/${section}`, { headers: { Authorization: `Bearer ${token}` } })
+    const data = await res.json()
+    document.getElementById('content').innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
+  }
+  window.loadSection = loadSection
+  loadSection('ordenes')
+</script>

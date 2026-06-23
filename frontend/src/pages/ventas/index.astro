@@ -1,0 +1,44 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Ventas">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Ventas</h1>
+    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;">
+      <a href="/ventas/pos" style="background:#10b981;color:#fff;padding:.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:600;">Ir al POS</a>
+      <a href="/ventas/cotizaciones" style="background:#3b82f6;color:#fff;padding:.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:600;">Cotizaciones</a>
+    </div>
+    <div id="ventas-list">Cargando ventas...</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  fetch(`${API}/api/ventas`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.json())
+    .then(ventas => {
+      const el = document.getElementById('ventas-list')
+      if (!ventas.length) { el.textContent = 'No hay ventas registradas.'; return }
+      el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+        <thead style="background:#f1f5f9;"><tr>
+          <th style="padding:.75rem 1rem;text-align:left;">#</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Cliente</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Sede</th>
+          <th style="padding:.75rem 1rem;text-align:right;">Total</th>
+          <th style="padding:.75rem 1rem;text-align:left;">Fecha</th>
+        </tr></thead>
+        <tbody>${ventas.map(v => `<tr style="border-top:1px solid #e2e8f0;">
+          <td style="padding:.75rem 1rem;">${v.id}</td>
+          <td style="padding:.75rem 1rem;">${v.cliente?.name ?? '—'}</td>
+          <td style="padding:.75rem 1rem;">${v.sede}</td>
+          <td style="padding:.75rem 1rem;text-align:right;font-weight:600;">S/ ${v.total}</td>
+          <td style="padding:.75rem 1rem;">${new Date(v.fechaVenta).toLocaleDateString('es-PE')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`
+    })
+</script>

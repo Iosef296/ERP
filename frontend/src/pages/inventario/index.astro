@@ -1,0 +1,9 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+import InventoryList from '../../components/vue/InventoryList.vue'
+---
+<App title="Inventario">
+  <Sidebar slot="sidebar" />
+  <InventoryList client:load />
+</App>

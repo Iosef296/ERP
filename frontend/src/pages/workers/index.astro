@@ -1,0 +1,9 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+import WorkerList from '../../components/vue/WorkerList.vue'
+---
+<App title="Trabajadores">
+  <Sidebar slot="sidebar" />
+  <WorkerList client:load />
+</App>

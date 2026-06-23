@@ -1,0 +1,32 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Administración de Tienda">
+  <Sidebar slot="sidebar" />
+  <div>
+    <h1 style="margin-bottom:1.5rem;">Administración de Tienda</h1>
+    <div id="stores-list">Cargando tiendas...</div>
+  </div>
+</App>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL
+  const token = localStorage.getItem('token')
+  if (!token) window.location.href = '/login'
+
+  fetch(`${API}/api/store`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.json())
+    .then(stores => {
+      const el = document.getElementById('stores-list')
+      if (!stores.length) { el.textContent = 'No hay tiendas registradas.'; return }
+      el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+        ${stores.map(s => `<div style="background:#fff;padding:1.5rem;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+          <div style="font-weight:700;font-size:1.1rem;margin-bottom:.5rem;">${s.name}</div>
+          <div style="color:#6b7280;font-size:.85rem;">${s.address ?? '—'}</div>
+          <div style="color:#6b7280;font-size:.85rem;">${s.phone ?? '—'}</div>
+          <div style="margin-top:.75rem;font-size:.85rem;">Encargado: <strong>${s.managerName ?? '—'}</strong></div>
+        </div>`).join('')}
+      </div>`
+    })
+</script>
