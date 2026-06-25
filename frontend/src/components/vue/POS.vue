@@ -33,9 +33,9 @@
       <h2 style="margin-bottom:.5rem;">Orden actual</h2>
 
       <div style="margin-bottom:.75rem;">
-        <label style="font-size:.85rem;">Cliente</label>
+        <label style="font-size:.85rem;">Cliente <span style="color:#ef4444;">*</span></label>
         <select v-model="clienteId" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;margin-top:.25rem;">
-          <option value="">Sin cliente</option>
+          <option value="">— Selecciona cliente —</option>
           <option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
       </div>
@@ -131,6 +131,11 @@ function removeFromCart(id) {
 }
 
 async function procesarVenta() {
+  if (!clienteId.value) {
+    exito.value = false
+    mensaje.value = 'Selecciona un cliente antes de cobrar'
+    return
+  }
   procesando.value = true
   mensaje.value = ''
   try {
@@ -138,7 +143,7 @@ async function procesarVenta() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
       body: JSON.stringify({
-        clienteId: clienteId.value || null,
+        clienteId: Number(clienteId.value),
         detalles: cart.value.map(i => ({ productoId: i.id, cantidad: i.qty, precioUnitario: i.price, subtotal: i.subtotal })),
         pagos: [{ monto: total.value, metodoPago: metodoPago.value }]
       })

@@ -35,5 +35,10 @@ app.use('/api/control', controlRoutes)
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }))
 
+app.use((err, req, res, next) => {
+  console.error(err)
+  res.status(500).json({ error: err.message || 'Error interno del servidor' })
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`))
