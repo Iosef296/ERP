@@ -6,34 +6,242 @@ import Sidebar from '../../components/Sidebar.astro'
   <Sidebar slot="sidebar" />
   <div>
     <h1 style="margin-bottom:1.5rem;">Control General</h1>
-    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
-      <button onclick="loadSection('indicadores')" style="background:#84cc16;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">KPIs</button>
-      <button onclick="loadSection('planes')" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Plan estratégico</button>
-      <button onclick="loadSection('auditorias')" style="background:#f59e0b;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Auditorías</button>
-      <button onclick="loadSection('calidad')" style="background:#10b981;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Control calidad</button>
-      <button onclick="loadSection('gastos')" style="background:#ef4444;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Gastos operativos</button>
+    <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+      <button onclick="setTab('indicadores')" id="tab-indicadores" style="background:#84cc16;color:#fff;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;">KPIs</button>
+      <button onclick="setTab('planes')" id="tab-planes" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Plan estratégico</button>
+      <button onclick="setTab('auditorias')" id="tab-auditorias" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Auditorías</button>
+      <button onclick="setTab('calidad')" id="tab-calidad" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Control calidad</button>
+      <button onclick="setTab('gastos')" id="tab-gastos" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Gastos operativos</button>
     </div>
-    <div id="content">Selecciona una sección.</div>
+    <div id="content"></div>
+  </div>
+
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:520px;max-height:90vh;overflow-y:auto;">
+      <h2 id="modal-title" style="margin-bottom:1rem;"></h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div id="form-fields"></div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  async function loadSection(section) {
-    const el = document.getElementById('content')
-    el.textContent = 'Cargando...'
-    try {
-      const res = await fetch(`${API}/api/control/${section}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error(`Error al cargar ${section}`)
-      const data = await res.json()
-      el.innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
-    } catch (e) {
-      el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
-    }
+let currentTab = 'indicadores'
+let editId = null
+let sedes = []
+
+const tabColors = { indicadores: '#84cc16', planes: '#3b82f6', auditorias: '#f59e0b', calidad: '#10b981', gastos: '#ef4444' }
+
+async function init() {
+  sedes = await fetch(`${API}/api/sedes`, { headers: h }).then(r => r.json()).catch(() => [])
+  setTab('indicadores')
+}
+
+function setTab(tab) {
+  currentTab = tab
+  document.querySelectorAll('[id^="tab-"]').forEach(b => { b.style.background = '#e5e7eb'; b.style.color = '#374151'; b.style.fontWeight = 'normal' })
+  const btn = document.getElementById('tab-' + tab)
+  btn.style.background = tabColors[tab]; btn.style.color = '#fff'; btn.style.fontWeight = '600'
+  loadSection(tab)
+}
+
+async function loadSection(section) {
+  const el = document.getElementById('content')
+  el.innerHTML = '<div style="padding:2rem;color:#6b7280;">Cargando...</div>'
+  try {
+    const res = await fetch(`${API}/api/control/${section}`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar')
+    const data = await res.json()
+    el.innerHTML = renderSection(section, data)
+  } catch(e) {
+    el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
   }
-  window.loadSection = loadSection
-  loadSection('indicadores')
+}
+
+function sedeNomOpts() {
+  return [{ value: '', label: '— Todas las sedes —' }, ...sedes.map(s => ({ value: s.id, label: s.nombre }))]
+}
+
+function renderSection(section, data) {
+  const labels = { indicadores: 'Nuevo KPI', planes: 'Nuevo plan', auditorias: 'Nueva auditoría', calidad: 'Nuevo control', gastos: 'Nuevo gasto' }
+  let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <span style="font-weight:600;">${data.length} registros</span>
+    <button onclick="openCreate()" style="background:${tabColors[section]};color:#fff;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">${labels[section]}</button>
+  </div>`
+  if (!data.length) return header + '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">Sin registros.</div>'
+
+  let rows = ''
+  let thead = ''
+  if (section === 'indicadores') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Tipo</th><th style="padding:.75rem 1rem;text-align:left;">Descripción</th><th style="padding:.75rem 1rem;text-align:left;">Valor actual</th><th style="padding:.75rem 1rem;text-align:left;">Metas</th><th style="padding:.75rem 1rem;text-align:right;">Cumplimiento</th><th style="padding:.75rem 1rem;text-align:left;">Sede</th><th></th></tr>'
+    rows = data.map(d => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${d.tipo}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;">${d.descripcion}</td>
+      <td style="padding:.75rem 1rem;">${d.valorActual}</td>
+      <td style="padding:.75rem 1rem;">${d.metas}</td>
+      <td style="padding:.75rem 1rem;text-align:right;font-weight:600;">${d.porcentajeCumplimiento}%</td>
+      <td style="padding:.75rem 1rem;">${d.sede?.nombre ?? '—'}</td>
+      <td style="padding:.75rem 1rem;"><button onclick="openEdit(${JSON.stringify(d).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button></td>
+    </tr>`).join('')
+  } else if (section === 'planes') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Nombre</th><th style="padding:.75rem 1rem;text-align:left;">Estado</th><th style="padding:.75rem 1rem;text-align:left;">Inicio</th><th style="padding:.75rem 1rem;text-align:left;">Fin</th><th style="padding:.75rem 1rem;text-align:left;">Objetivos</th></tr>'
+    rows = data.map(d => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${d.nombre}</td>
+      <td style="padding:.75rem 1rem;"><span style="background:${d.estado==='Activo'?'#d1fae5':'#f3f4f6'};color:${d.estado==='Activo'?'#065f46':'#374151'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${d.estado}</span></td>
+      <td style="padding:.75rem 1rem;">${d.fechaInicio?.slice(0,10)}</td>
+      <td style="padding:.75rem 1rem;">${d.fechaFinal?.slice(0,10)}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.objetivos}</td>
+    </tr>`).join('')
+  } else if (section === 'auditorias') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Fecha</th><th style="padding:.75rem 1rem;text-align:left;">Área</th><th style="padding:.75rem 1rem;text-align:left;">Resultado</th><th style="padding:.75rem 1rem;text-align:left;">Observaciones</th><th style="padding:.75rem 1rem;text-align:left;">Sede</th></tr>'
+    rows = data.map(d => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;">${d.fecha?.slice(0,10)}</td>
+      <td style="padding:.75rem 1rem;font-weight:600;">${d.area}</td>
+      <td style="padding:.75rem 1rem;">${d.resultado}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;">${d.observaciones ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${d.sede?.nombre ?? '—'}</td>
+    </tr>`).join('')
+  } else if (section === 'calidad') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Fecha control</th><th style="padding:.75rem 1rem;text-align:left;">Resultado</th><th style="padding:.75rem 1rem;text-align:left;">Sede</th></tr>'
+    rows = data.map(d => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;">${d.fechaControl?.slice(0,10)}</td>
+      <td style="padding:.75rem 1rem;">${d.resultado}</td>
+      <td style="padding:.75rem 1rem;">${d.sede?.nombre ?? '—'}</td>
+    </tr>`).join('')
+  } else if (section === 'gastos') {
+    const total = data.reduce((s, d) => s + Number(d.desembolso), 0)
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Categoría</th><th style="padding:.75rem 1rem;text-align:right;">Desembolso</th><th style="padding:.75rem 1rem;text-align:left;">Sede</th></tr>'
+    rows = data.map(d => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${d.categoria}</td>
+      <td style="padding:.75rem 1rem;text-align:right;">S/ ${Number(d.desembolso).toFixed(2)}</td>
+      <td style="padding:.75rem 1rem;">${d.sede?.nombre ?? '—'}</td>
+    </tr>`).join('')
+    header += `<div style="background:#fff;padding:.75rem 1rem;border-radius:8px;margin-bottom:.75rem;font-weight:600;font-size:1.1rem;">Total: S/ ${total.toFixed(2)}</div>`
+  }
+
+  return header + `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+    <thead style="background:#f1f5f9;">${thead}</thead>
+    <tbody>${rows}</tbody>
+  </table>`
+}
+
+function getFields() {
+  const sedeOpts = sedeNomOpts()
+  if (currentTab === 'indicadores') return [
+    { key: 'tipo', label: 'Tipo de indicador', required: true },
+    { key: 'descripcion', label: 'Descripción', required: true },
+    { key: 'metas', label: 'Metas', required: true },
+    { key: 'valorActual', label: 'Valor actual', required: true },
+    { key: 'porcentajeCumplimiento', label: 'Cumplimiento (%)', type: 'number', required: true },
+    { key: 'fechaActual', label: 'Fecha', type: 'date', required: true },
+    { key: 'sedeId', label: 'Sede (opcional)', type: 'select', options: sedeOpts },
+  ]
+  if (currentTab === 'planes') return [
+    { key: 'nombre', label: 'Nombre del plan', required: true },
+    { key: 'objetivos', label: 'Objetivos', required: true },
+    { key: 'estado', label: 'Estado', type: 'select', options: ['Borrador','Activo','Completado','Cancelado'], required: true },
+    { key: 'fechaInicio', label: 'Fecha inicio', type: 'date', required: true },
+    { key: 'fechaFinal', label: 'Fecha final', type: 'date', required: true },
+  ]
+  if (currentTab === 'auditorias') return [
+    { key: 'fecha', label: 'Fecha', type: 'date', required: true },
+    { key: 'area', label: 'Área', required: true },
+    { key: 'resultado', label: 'Resultado', required: true },
+    { key: 'observaciones', label: 'Observaciones' },
+    { key: 'sedeId', label: 'Sede (opcional)', type: 'select', options: sedeOpts },
+  ]
+  if (currentTab === 'calidad') return [
+    { key: 'fechaControl', label: 'Fecha de control', type: 'date', required: true },
+    { key: 'resultado', label: 'Resultado', required: true },
+    { key: 'sedeId', label: 'Sede (opcional)', type: 'select', options: sedeOpts },
+  ]
+  if (currentTab === 'gastos') return [
+    { key: 'categoria', label: 'Categoría', required: true },
+    { key: 'desembolso', label: 'Desembolso (S/)', type: 'number', required: true },
+    { key: 'sedeId', label: 'Sede (opcional)', type: 'select', options: sedeOpts },
+  ]
+  return []
+}
+
+function renderField(f, val = '') {
+  const style = 'width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;'
+  if (f.type === 'select') {
+    const opts = Array.isArray(f.options) && typeof f.options[0] === 'object'
+      ? f.options.map(o => `<option value="${o.value}" ${String(val)===String(o.value)?'selected':''}>${o.label}</option>`).join('')
+      : f.options.map(o => `<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')
+    return `<select name="${f.key}" ${f.required?'required':''} style="${style}">${opts}</select>`
+  }
+  return `<input name="${f.key}" type="${f.type??'text'}" ${f.required?'required':''} value="${val}" style="${style}">`
+}
+
+function openCreate() {
+  editId = null
+  const titles = { indicadores: 'Nuevo KPI', planes: 'Nuevo plan estratégico', auditorias: 'Nueva auditoría', calidad: 'Nuevo control de calidad', gastos: 'Nuevo gasto operativo' }
+  document.getElementById('modal-title').textContent = titles[currentTab]
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getFields().map(f =>
+    `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f)}</div>`
+  ).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function openEdit(data) {
+  editId = data.id
+  const titles = { indicadores: 'Editar KPI', planes: 'Editar plan', auditorias: 'Editar auditoría', calidad: 'Editar control', gastos: 'Editar gasto' }
+  document.getElementById('modal-title').textContent = titles[currentTab]
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getFields().map(f => {
+    let val = data[f.key] ?? ''
+    if (f.type === 'date' && val) val = String(val).slice(0,10)
+    return `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f, val)}</div>`
+  }).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; editId = null }
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  const fd = new FormData(e.target)
+  const body = {}
+  for (const [k, v] of fd.entries()) {
+    if (v === '') continue
+    const numKeys = ['sedeId','porcentajeCumplimiento','desembolso']
+    body[k] = numKeys.includes(k) ? Number(v) : v
+  }
+  try {
+    const endpoint = { indicadores: 'indicadores', planes: 'planes', auditorias: 'auditorias', calidad: 'calidad', gastos: 'gastos' }[currentTab]
+    let url = `${API}/api/control/${endpoint}`
+    let method = 'POST'
+    if (editId && currentTab === 'indicadores') { url += `/${editId}`; method = 'PUT' }
+    const res = await fetch(url, { method, headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { showErr(data.error ?? 'Error al guardar'); return }
+    closeModal()
+    loadSection(currentTab)
+  } catch { showErr('Error de conexión') }
+  finally { btn.disabled = false; btn.textContent = 'Guardar' }
+})
+
+function showErr(msg) { const el = document.getElementById('form-error'); el.textContent = msg; el.style.display = 'block' }
+
+window.setTab = setTab
+window.openCreate = openCreate
+window.openEdit = openEdit
+window.closeModal = closeModal
+
+init()
 </script>

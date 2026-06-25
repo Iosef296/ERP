@@ -1,0 +1,117 @@
+---
+import App from '../../layouts/App.astro'
+import Sidebar from '../../components/Sidebar.astro'
+---
+<App title="Clientes">
+  <Sidebar slot="sidebar" />
+  <div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+      <h1>Clientes</h1>
+      <button onclick="openCreate()" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nuevo cliente</button>
+    </div>
+    <div id="lista">Cargando...</div>
+  </div>
+
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:480px;max-height:90vh;overflow-y:auto;">
+      <h2 id="modal-title" style="margin-bottom:1rem;"></h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Nombre</label><input name="name" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+        <div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Email</label><input name="email" type="email" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+        <div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Teléfono</label><input name="phone" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+        <div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Nro. Documento</label><input name="documentNumber" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+        <div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Dirección</label><input name="address" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</App>
+
+<script>
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+let editId = null
+
+async function load() {
+  try {
+    const res = await fetch(`${API}/api/clientes`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar clientes')
+    const clientes = await res.json()
+    const el = document.getElementById('lista')
+    if (!clientes.length) { el.innerHTML = '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">No hay clientes registrados.</div>'; return }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Email</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Teléfono</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Documento</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Dirección</th>
+        <th style="padding:.75rem 1rem;"></th>
+      </tr></thead>
+      <tbody>${clientes.map(c => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${c.name}</td>
+        <td style="padding:.75rem 1rem;font-size:.85rem;">${c.email ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">${c.phone ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">${c.documentNumber ?? '—'}</td>
+        <td style="padding:.75rem 1rem;font-size:.85rem;">${c.address ?? '—'}</td>
+        <td style="padding:.75rem 1rem;display:flex;gap:.25rem;">
+          <button onclick="openEdit(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button>
+          <button onclick="deleteCliente(${c.id})" style="background:#fee2e2;color:#991b1b;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Eliminar</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`
+  } catch(e) { document.getElementById('lista').innerHTML = `<div style="color:#991b1b;padding:1rem;">${e.message}</div>` }
+}
+
+function fillForm(data = {}) {
+  const f = document.getElementById('modal-form')
+  f.name.value = data.name ?? ''
+  f.email.value = data.email ?? ''
+  f.phone.value = data.phone ?? ''
+  f.documentNumber.value = data.documentNumber ?? ''
+  f.address.value = data.address ?? ''
+}
+
+function openCreate() { editId = null; document.getElementById('modal-title').textContent = 'Nuevo cliente'; document.getElementById('form-error').style.display = 'none'; fillForm(); document.getElementById('modal').style.display = 'flex' }
+function openEdit(data) { editId = data.id; document.getElementById('modal-title').textContent = 'Editar cliente'; document.getElementById('form-error').style.display = 'none'; fillForm(data); document.getElementById('modal').style.display = 'flex' }
+function closeModal() { document.getElementById('modal').style.display = 'none'; editId = null }
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  const fd = new FormData(e.target)
+  const body = Object.fromEntries([...fd.entries()].filter(([,v]) => v !== ''))
+  try {
+    const url = editId ? `${API}/api/clientes/${editId}` : `${API}/api/clientes`
+    const method = editId ? 'PUT' : 'POST'
+    const res = await fetch(url, { method, headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { document.getElementById('form-error').textContent = data.error ?? 'Error al guardar'; document.getElementById('form-error').style.display = 'block'; return }
+    closeModal(); load()
+  } catch { document.getElementById('form-error').textContent = 'Error de conexión'; document.getElementById('form-error').style.display = 'block' }
+  finally { btn.disabled = false; btn.textContent = 'Guardar' }
+})
+
+async function deleteCliente(id) {
+  if (!confirm('¿Eliminar este cliente?')) return
+  try {
+    await fetch(`${API}/api/clientes/${id}`, { method: 'DELETE', headers: h })
+    load()
+  } catch { alert('Error al eliminar') }
+}
+
+window.openCreate = openCreate
+window.openEdit = openEdit
+window.closeModal = closeModal
+window.deleteCliente = deleteCliente
+
+load()
+</script>

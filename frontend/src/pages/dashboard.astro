@@ -6,30 +6,79 @@ import Sidebar from '../components/Sidebar.astro'
   <Sidebar slot="sidebar" />
   <div>
     <h1 style="margin-bottom:1.5rem;">Dashboard</h1>
-    <div id="cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;"></div>
+
+    <!-- Metrics -->
+    <div id="metrics" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin-bottom:2rem;"></div>
+
+    <!-- Module cards -->
+    <h2 style="font-size:1rem;font-weight:600;color:#6b7280;margin-bottom:1rem;text-transform:uppercase;letter-spacing:.05em;">Módulos</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;" id="modules"></div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}` }
 
-  const modules = [
-    { label: 'Trabajadores', href: '/workers', color: '#3b82f6' },
-    { label: 'Ventas', href: '/ventas', color: '#10b981' },
-    { label: 'POS', href: '/ventas/pos', color: '#f59e0b' },
-    { label: 'Inventario', href: '/inventario', color: '#8b5cf6' },
-    { label: 'Producción', href: '/produccion', color: '#ef4444' },
-    { label: 'Tienda', href: '/store', color: '#06b6d4' },
-    { label: 'Control General', href: '/control', color: '#84cc16' },
-  ]
+const modules = [
+  { label: 'Trabajadores', href: '/workers', color: '#3b82f6', icon: '👷' },
+  { label: 'Ventas', href: '/ventas', color: '#10b981', icon: '💰' },
+  { label: 'POS', href: '/ventas/pos', color: '#f59e0b', icon: '🛒' },
+  { label: 'Cotizaciones', href: '/ventas/cotizaciones', color: '#6366f1', icon: '📋' },
+  { label: 'Inventario', href: '/inventario', color: '#8b5cf6', icon: '📦' },
+  { label: 'Producción', href: '/produccion', color: '#ef4444', icon: '🏭' },
+  { label: 'Tienda', href: '/store', color: '#06b6d4', icon: '🏪' },
+  { label: 'Control General', href: '/control', color: '#84cc16', icon: '📊' },
+  { label: 'Clientes', href: '/clientes', color: '#14b8a6', icon: '👥' },
+  { label: 'Roles', href: '/roles', color: '#f97316', icon: '🔑' },
+  { label: 'Sedes', href: '/sedes', color: '#ec4899', icon: '📍' },
+]
 
-  const container = document.getElementById('cards')
-  modules.forEach(m => {
-    container.innerHTML += `
-      <a href="${m.href}" style="background:${m.color};color:#fff;padding:1.5rem;border-radius:10px;text-decoration:none;font-weight:600;font-size:1.1rem;display:block;transition:opacity .2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-        ${m.label}
-      </a>`
-  })
+const container = document.getElementById('modules')
+modules.forEach(m => {
+  container.innerHTML += `<a href="${m.href}" style="background:${m.color};color:#fff;padding:1.25rem;border-radius:10px;text-decoration:none;font-weight:600;font-size:.95rem;display:flex;flex-direction:column;gap:.5rem;transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+    <span style="font-size:1.5rem;">${m.icon}</span>${m.label}</a>`
+})
+
+async function loadMetrics() {
+  const metricsEl = document.getElementById('metrics')
+  try {
+    const [workers, ventas, cotizaciones, inventario] = await Promise.allSettled([
+      fetch(`${API}/api/workers`, { headers: h }).then(r => r.json()),
+      fetch(`${API}/api/ventas`, { headers: h }).then(r => r.json()),
+      fetch(`${API}/api/cotizaciones`, { headers: h }).then(r => r.json()),
+      fetch(`${API}/api/inventario/products`, { headers: h }).then(r => r.json()),
+    ])
+
+    const w = workers.status === 'fulfilled' ? workers.value : []
+    const v = ventas.status === 'fulfilled' ? ventas.value : []
+    const c = cotizaciones.status === 'fulfilled' ? cotizaciones.value : []
+    const inv = inventario.status === 'fulfilled' ? inventario.value : []
+
+    const today = new Date().toDateString()
+    const ventasHoy = v.filter(x => new Date(x.fechaVenta).toDateString() === today)
+    const totalHoy = ventasHoy.reduce((s, x) => s + Number(x.total), 0)
+    const stockBajo = inv.filter(x => Number(x.stock) < 10).length
+    const cotPendientes = c.filter(x => x.estado === 'Borrador').length
+
+    const metrics = [
+      { label: 'Ventas hoy', value: `S/ ${totalHoy.toFixed(2)}`, color: '#10b981', sub: `${ventasHoy.length} transacciones` },
+      { label: 'Trabajadores', value: w.length, color: '#3b82f6', sub: `${w.filter(x => x.estado === 'activo').length} activos` },
+      { label: 'Stock bajo', value: stockBajo, color: stockBajo > 0 ? '#ef4444' : '#10b981', sub: 'productos < 10 unidades' },
+      { label: 'Cotizaciones', value: cotPendientes, color: '#f59e0b', sub: 'pendientes de aprobar' },
+    ]
+
+    metricsEl.innerHTML = metrics.map(m => `<div style="background:#fff;padding:1.25rem;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+      <div style="color:${m.color};font-size:1.75rem;font-weight:700;">${m.value}</div>
+      <div style="font-weight:600;margin-top:.25rem;">${m.label}</div>
+      <div style="color:#6b7280;font-size:.8rem;margin-top:.15rem;">${m.sub}</div>
+    </div>`).join('')
+  } catch {
+    metricsEl.innerHTML = ''
+  }
+}
+
+loadMetrics()
 </script>

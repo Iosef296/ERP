@@ -2,32 +2,303 @@
 import App from '../../layouts/App.astro'
 import Sidebar from '../../components/Sidebar.astro'
 ---
-<App title="Administración de Tienda">
+<App title="Tienda">
   <Sidebar slot="sidebar" />
   <div>
     <h1 style="margin-bottom:1.5rem;">Administración de Tienda</h1>
-    <div id="stores-list">Cargando tiendas...</div>
+
+    <!-- Store selector -->
+    <div style="display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;">
+      <select id="store-select" onchange="selectStore(this.value)" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;min-width:200px;">
+        <option value="">— Selecciona tienda —</option>
+      </select>
+      <button onclick="openNewStore()" style="background:#06b6d4;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nueva tienda</button>
+    </div>
+
+    <!-- Store tabs (hidden until store selected) -->
+    <div id="store-panel" style="display:none;">
+      <div id="store-info" style="background:#fff;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;gap:2rem;align-items:center;"></div>
+      <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+        <button onclick="setStoreTab('personal')" id="stab-personal" style="background:#3b82f6;color:#fff;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Personal</button>
+        <button onclick="setStoreTab('asistencia')" id="stab-asistencia" style="background:#e5e7eb;color:#374151;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">Asistencia</button>
+        <button onclick="setStoreTab('maquinas')" id="stab-maquinas" style="background:#e5e7eb;color:#374151;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">Máquinas</button>
+        <button onclick="setStoreTab('incidentes')" id="stab-incidentes" style="background:#e5e7eb;color:#374151;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">Incidentes</button>
+        <button onclick="setStoreTab('avisos')" id="stab-avisos" style="background:#e5e7eb;color:#374151;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">Avisos</button>
+      </div>
+      <div id="store-content"></div>
+    </div>
+
+    <div id="no-store" style="background:#fff;padding:3rem;border-radius:8px;text-align:center;color:#6b7280;">Selecciona o crea una tienda.</div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:520px;max-height:90vh;overflow-y:auto;">
+      <h2 id="modal-title" style="margin-bottom:1rem;"></h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div id="form-fields"></div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  fetch(`${API}/api/store`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => { if (!r.ok) throw new Error('Error al cargar tiendas'); return r.json() })
-    .then(stores => {
-      const el = document.getElementById('stores-list')
-      if (!stores.length) { el.textContent = 'No hay tiendas registradas.'; return }
-      el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
-        ${stores.map(s => `<div style="background:#fff;padding:1.5rem;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.1);">
-          <div style="font-weight:700;font-size:1.1rem;margin-bottom:.5rem;">${s.name}</div>
-          <div style="color:#6b7280;font-size:.85rem;">${s.address ?? '—'}</div>
-          <div style="color:#6b7280;font-size:.85rem;">${s.phone ?? '—'}</div>
-          <div style="margin-top:.75rem;font-size:.85rem;">Encargado: <strong>${s.managerName ?? '—'}</strong></div>
-        </div>`).join('')}
-      </div>`
-    })
-    .catch(e => { document.getElementById('stores-list').innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>` })
+let stores = []
+let currentStoreId = null
+let currentStoreTab = 'personal'
+let personnel = []
+let modalMode = null
+
+const stabColors = { personal: '#3b82f6', asistencia: '#10b981', maquinas: '#f59e0b', incidentes: '#ef4444', avisos: '#8b5cf6' }
+
+async function init() {
+  stores = await fetch(`${API}/api/store`, { headers: h }).then(r => r.json()).catch(() => [])
+  const sel = document.getElementById('store-select')
+  stores.forEach(s => {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sel.appendChild(o)
+  })
+  if (stores.length === 1) selectStore(stores[0].id)
+}
+
+function selectStore(id) {
+  if (!id) { document.getElementById('store-panel').style.display = 'none'; document.getElementById('no-store').style.display = 'block'; return }
+  currentStoreId = Number(id)
+  const store = stores.find(s => s.id === currentStoreId)
+  document.getElementById('no-store').style.display = 'none'
+  document.getElementById('store-panel').style.display = 'block'
+  document.getElementById('store-info').innerHTML = `
+    <div><strong style="font-size:1.1rem;">${store.name}</strong></div>
+    <div style="color:#6b7280;font-size:.85rem;">${store.address ?? '—'}</div>
+    <div style="color:#6b7280;font-size:.85rem;">${store.phone ?? '—'}</div>
+    <div style="color:#6b7280;font-size:.85rem;">Encargado: ${store.managerName ?? '—'}</div>`
+  document.getElementById('store-select').value = id
+  setStoreTab('personal')
+}
+
+function setStoreTab(tab) {
+  currentStoreTab = tab
+  document.querySelectorAll('[id^="stab-"]').forEach(b => { b.style.background = '#e5e7eb'; b.style.color = '#374151'; b.style.fontWeight = 'normal' })
+  const btn = document.getElementById('stab-' + tab)
+  btn.style.background = stabColors[tab]; btn.style.color = '#fff'; btn.style.fontWeight = '600'
+  loadStoreTab(tab)
+}
+
+async function loadStoreTab(tab) {
+  const el = document.getElementById('store-content')
+  el.innerHTML = '<div style="padding:2rem;color:#6b7280;">Cargando...</div>'
+  try {
+    const endpointMap = { personal: 'personnel', asistencia: 'attendance', maquinas: 'machines', incidentes: 'incidents', avisos: 'notices' }
+    const endpoint = endpointMap[tab]
+    const res = await fetch(`${API}/api/store/${currentStoreId}/${endpoint}`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar')
+    const data = await res.json()
+    if (tab === 'personal') { personnel = data }
+    el.innerHTML = renderStoreTab(tab, data)
+  } catch(e) {
+    el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
+  }
+}
+
+function renderStoreTab(tab, data) {
+  const btnLabels = { personal: 'Nuevo empleado', asistencia: 'Registrar asistencia', maquinas: 'Nueva máquina', incidentes: 'Reportar incidente', avisos: 'Nuevo aviso' }
+  let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <span style="font-weight:600;">${data.length} registros</span>
+    <button onclick="openCreate()" style="background:${stabColors[tab]};color:#fff;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">${btnLabels[tab]}</button>
+  </div>`
+  if (!data.length) return header + '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">Sin registros.</div>'
+
+  let thead = '', rows = ''
+  if (tab === 'personal') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Nombre</th><th style="padding:.75rem 1rem;text-align:left;">Email</th><th style="padding:.75rem 1rem;text-align:left;">Teléfono</th><th style="padding:.75rem 1rem;text-align:left;">Ingreso</th><th style="padding:.75rem 1rem;text-align:left;">Estado</th></tr>'
+    rows = data.map(p => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${p.firstName} ${p.lastName}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;">${p.email ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${p.phone ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${p.hireDate?.slice(0,10) ?? '—'}</td>
+      <td style="padding:.75rem 1rem;"><span style="background:${p.isActive?'#d1fae5':'#fee2e2'};color:${p.isActive?'#065f46':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${p.isActive?'Activo':'Inactivo'}</span></td>
+    </tr>`).join('')
+  } else if (tab === 'asistencia') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Empleado</th><th style="padding:.75rem 1rem;text-align:left;">Fecha</th><th style="padding:.75rem 1rem;text-align:left;">Entrada</th><th style="padding:.75rem 1rem;text-align:left;">Salida</th><th style="padding:.75rem 1rem;text-align:left;">Estado</th><th style="padding:.75rem 1rem;text-align:left;">Notas</th></tr>'
+    rows = data.map(a => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${a.personnel?.firstName ?? ''} ${a.personnel?.lastName ?? ''}</td>
+      <td style="padding:.75rem 1rem;">${a.date?.slice(0,10)}</td>
+      <td style="padding:.75rem 1rem;">${a.checkIn ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${a.checkOut ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${a.status}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;">${a.notes ?? '—'}</td>
+    </tr>`).join('')
+  } else if (tab === 'maquinas') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Nombre</th><th style="padding:.75rem 1rem;text-align:left;">Serie</th><th style="padding:.75rem 1rem;text-align:left;">Estado</th><th style="padding:.75rem 1rem;text-align:left;">Últ. mantenimiento</th><th style="padding:.75rem 1rem;text-align:left;">Próx. mantenimiento</th></tr>'
+    rows = data.map(m => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${m.name}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;">${m.serialNumber ?? '—'}</td>
+      <td style="padding:.75rem 1rem;"><span style="background:${m.status==='operational'?'#d1fae5':'#fee2e2'};color:${m.status==='operational'?'#065f46':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${m.status}</span></td>
+      <td style="padding:.75rem 1rem;">${m.lastMaintenance?.slice(0,10) ?? '—'}</td>
+      <td style="padding:.75rem 1rem;">${m.nextMaintenance?.slice(0,10) ?? '—'}</td>
+    </tr>`).join('')
+  } else if (tab === 'incidentes') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Título</th><th style="padding:.75rem 1rem;text-align:left;">Severidad</th><th style="padding:.75rem 1rem;text-align:left;">Estado</th><th style="padding:.75rem 1rem;text-align:left;">Ocurrió</th><th style="padding:.75rem 1rem;text-align:left;">Descripción</th></tr>'
+    const sevColor = { low: '#d1fae5', medium: '#fef9c3', high: '#fee2e2', critical: '#fce7f3' }
+    const sevText = { low: '#065f46', medium: '#854d0e', high: '#991b1b', critical: '#9d174d' }
+    rows = data.map(i => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${i.title}</td>
+      <td style="padding:.75rem 1rem;"><span style="background:${sevColor[i.severity]??'#f3f4f6'};color:${sevText[i.severity]??'#374151'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${i.severity}</span></td>
+      <td style="padding:.75rem 1rem;">${i.status}</td>
+      <td style="padding:.75rem 1rem;">${new Date(i.occurredAt).toLocaleDateString('es-PE')}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.description}</td>
+    </tr>`).join('')
+  } else if (tab === 'avisos') {
+    thead = '<tr><th style="padding:.75rem 1rem;text-align:left;">Título</th><th style="padding:.75rem 1rem;text-align:left;">Prioridad</th><th style="padding:.75rem 1rem;text-align:left;">Vence</th><th style="padding:.75rem 1rem;text-align:left;">Contenido</th></tr>'
+    const priColor = { low: '#f3f4f6', normal: '#dbeafe', high: '#fef9c3', urgent: '#fee2e2' }
+    rows = data.map(n => `<tr style="border-top:1px solid #e2e8f0;">
+      <td style="padding:.75rem 1rem;font-weight:600;">${n.title}</td>
+      <td style="padding:.75rem 1rem;"><span style="background:${priColor[n.priority]??'#f3f4f6'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${n.priority}</span></td>
+      <td style="padding:.75rem 1rem;">${n.expiresAt ? new Date(n.expiresAt).toLocaleDateString('es-PE') : '—'}</td>
+      <td style="padding:.75rem 1rem;font-size:.85rem;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.content}</td>
+    </tr>`).join('')
+  }
+
+  return header + `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+    <thead style="background:#f1f5f9;">${thead}</thead>
+    <tbody>${rows}</tbody>
+  </table>`
+}
+
+function getCreateFields() {
+  if (modalMode === 'new-store') return [
+    { key: 'name', label: 'Nombre', required: true },
+    { key: 'address', label: 'Dirección' },
+    { key: 'phone', label: 'Teléfono' },
+    { key: 'managerName', label: 'Encargado' },
+  ]
+  if (currentStoreTab === 'personal') return [
+    { key: 'firstName', label: 'Nombre', required: true },
+    { key: 'lastName', label: 'Apellido', required: true },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Teléfono' },
+    { key: 'hireDate', label: 'Fecha de ingreso', type: 'date' },
+  ]
+  if (currentStoreTab === 'asistencia') return [
+    { key: 'storePersonnelId', label: 'Empleado', type: 'select', required: true,
+      options: [{ value: '', label: '— Selecciona —' }, ...personnel.map(p => ({ value: p.id, label: `${p.firstName} ${p.lastName}` }))] },
+    { key: 'date', label: 'Fecha', type: 'date', required: true },
+    { key: 'checkIn', label: 'Hora entrada (HH:MM)' },
+    { key: 'checkOut', label: 'Hora salida (HH:MM)' },
+    { key: 'status', label: 'Estado', type: 'select', options: ['present','absent','late','half-day'], required: true },
+    { key: 'notes', label: 'Notas' },
+  ]
+  if (currentStoreTab === 'maquinas') return [
+    { key: 'name', label: 'Nombre de la máquina', required: true },
+    { key: 'serialNumber', label: 'Número de serie' },
+    { key: 'status', label: 'Estado', type: 'select', options: ['operational','maintenance','broken'], required: true },
+    { key: 'lastMaintenance', label: 'Último mantenimiento', type: 'date' },
+    { key: 'nextMaintenance', label: 'Próximo mantenimiento', type: 'date' },
+  ]
+  if (currentStoreTab === 'incidentes') return [
+    { key: 'title', label: 'Título', required: true },
+    { key: 'description', label: 'Descripción', required: true },
+    { key: 'occurredAt', label: 'Fecha/hora', type: 'datetime-local', required: true },
+    { key: 'severity', label: 'Severidad', type: 'select', options: ['low','medium','high','critical'], required: true },
+    { key: 'status', label: 'Estado', type: 'select', options: ['open','investigating','resolved'], required: true },
+  ]
+  if (currentStoreTab === 'avisos') return [
+    { key: 'title', label: 'Título', required: true },
+    { key: 'content', label: 'Contenido', required: true },
+    { key: 'priority', label: 'Prioridad', type: 'select', options: ['low','normal','high','urgent'], required: true },
+    { key: 'expiresAt', label: 'Fecha expiración', type: 'date' },
+  ]
+  return []
+}
+
+function renderField(f) {
+  const style = 'width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;'
+  if (f.type === 'select') {
+    const opts = Array.isArray(f.options) && typeof f.options[0] === 'object'
+      ? f.options.map(o => `<option value="${o.value}">${o.label}</option>`).join('')
+      : f.options.map(o => `<option value="${o}">${o}</option>`).join('')
+    return `<select name="${f.key}" ${f.required?'required':''} style="${style}">${opts}</select>`
+  }
+  return `<input name="${f.key}" type="${f.type??'text'}" ${f.required?'required':''} style="${style}">`
+}
+
+function openCreate() {
+  modalMode = currentStoreTab
+  const titles = { personal: 'Nuevo empleado', asistencia: 'Registrar asistencia', maquinas: 'Nueva máquina', incidentes: 'Reportar incidente', avisos: 'Nuevo aviso' }
+  document.getElementById('modal-title').textContent = titles[currentStoreTab]
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getCreateFields().map(f =>
+    `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f)}</div>`
+  ).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function openNewStore() {
+  modalMode = 'new-store'
+  document.getElementById('modal-title').textContent = 'Nueva tienda'
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getCreateFields().map(f =>
+    `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f)}</div>`
+  ).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; modalMode = null }
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  const fd = new FormData(e.target)
+  const body = {}
+  for (const [k, v] of fd.entries()) {
+    if (v === '') continue
+    body[k] = (k === 'storePersonnelId') ? Number(v) : v
+  }
+  try {
+    let url, method = 'POST'
+    if (modalMode === 'new-store') {
+      url = `${API}/api/store`
+    } else {
+      const endpointMap = { personal: 'personnel', asistencia: 'attendance', maquinas: 'machines', incidentes: 'incidents', avisos: 'notices' }
+      url = `${API}/api/store/${currentStoreId}/${endpointMap[currentStoreTab]}`
+    }
+    const res = await fetch(url, { method, headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { showErr(data.error ?? 'Error al guardar'); return }
+    if (modalMode === 'new-store') {
+      stores.push(data)
+      const sel = document.getElementById('store-select')
+      const o = document.createElement('option'); o.value = data.id; o.textContent = data.name; sel.appendChild(o)
+      closeModal()
+      selectStore(data.id)
+    } else {
+      if (currentStoreTab === 'personal') {
+        personnel = await fetch(`${API}/api/store/${currentStoreId}/personnel`, { headers: h }).then(r => r.json()).catch(() => personnel)
+      }
+      closeModal()
+      loadStoreTab(currentStoreTab)
+    }
+  } catch { showErr('Error de conexión') }
+  finally { btn.disabled = false; btn.textContent = 'Guardar' }
+})
+
+function showErr(msg) { const el = document.getElementById('form-error'); el.textContent = msg; el.style.display = 'block' }
+
+window.setStoreTab = setStoreTab
+window.selectStore = selectStore
+window.openCreate = openCreate
+window.openNewStore = openNewStore
+window.closeModal = closeModal
+
+init()
 </script>

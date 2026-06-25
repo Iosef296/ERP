@@ -26,7 +26,14 @@ router.post('/', async (req, res) => {
   const { clienteId, fechaVencimiento, detalles } = req.body
   const total = detalles.reduce((sum, d) => sum + (d.cantidad * (d.precioUnitario ?? 0)), 0)
   const cotizacion = await prisma.cotizacionCabecera.create({
-    data: { clienteId, fechaVencimiento: new Date(fechaVencimiento), totalEstimado: total, detalles: { create: detalles } },
+    data: {
+      clienteId,
+      fechaVencimiento: new Date(fechaVencimiento),
+      totalEstimado: total,
+      detalles: {
+        create: detalles.map(({ precioUnitario, ...d }) => d)
+      }
+    },
     include: { detalles: true }
   })
   res.status(201).json(cotizacion)

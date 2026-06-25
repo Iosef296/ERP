@@ -7,47 +7,201 @@ import Sidebar from '../../components/Sidebar.astro'
   <div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
       <h1>Cotizaciones</h1>
-      <button id="btn-nueva" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nueva cotización</button>
+      <button onclick="openCreate()" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nueva cotización</button>
     </div>
     <div id="lista">Cargando...</div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:640px;max-height:90vh;overflow-y:auto;">
+      <h2 style="margin-bottom:1rem;">Nueva cotización</h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div style="margin-bottom:.75rem;">
+          <label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Cliente</label>
+          <select id="sel-cliente" name="clienteId" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;">
+            <option value="">— Selecciona cliente —</option>
+          </select>
+        </div>
+        <div style="margin-bottom:.75rem;">
+          <label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Fecha vencimiento</label>
+          <input type="date" name="fechaVencimiento" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;">
+        </div>
+
+        <div style="margin-bottom:.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+            <label style="font-size:.85rem;font-weight:600;">Productos</label>
+            <button type="button" onclick="addRow()" style="background:#e0f2fe;color:#0369a1;border:none;padding:.25rem .75rem;border-radius:4px;cursor:pointer;font-size:.8rem;">+ Agregar</button>
+          </div>
+          <div id="rows-container"></div>
+        </div>
+
+        <div style="background:#f8fafc;padding:.75rem;border-radius:6px;margin-bottom:1rem;">
+          <strong>Total estimado: S/ <span id="total-display">0.00</span></strong>
+        </div>
+
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  async function load() {
-    try {
-      const res = await fetch(`${API}/api/cotizaciones`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error('Error al cargar')
-      const data = await res.json()
-      const el = document.getElementById('lista')
-      if (!data.length) { el.textContent = 'No hay cotizaciones registradas.'; return }
-      el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
-        <thead style="background:#f1f5f9;"><tr>
-          <th style="padding:.75rem 1rem;text-align:left;">#</th>
-          <th style="padding:.75rem 1rem;text-align:left;">Cliente</th>
-          <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
-          <th style="padding:.75rem 1rem;text-align:right;">Total estimado</th>
-          <th style="padding:.75rem 1rem;text-align:left;">Vencimiento</th>
-        </tr></thead>
-        <tbody>${data.map(c => `<tr style="border-top:1px solid #e2e8f0;">
-          <td style="padding:.75rem 1rem;">${c.id}</td>
-          <td style="padding:.75rem 1rem;">${c.cliente?.name ?? '—'}</td>
-          <td style="padding:.75rem 1rem;">
-            <span style="background:${c.estado==='Aprobado'?'#d1fae5':c.estado==='Rechazado'?'#fee2e2':'#fef9c3'};
-                         color:${c.estado==='Aprobado'?'#065f46':c.estado==='Rechazado'?'#991b1b':'#854d0e'};
-                         padding:2px 8px;border-radius:12px;font-size:.8rem;">${c.estado}</span>
-          </td>
-          <td style="padding:.75rem 1rem;text-align:right;font-weight:600;">S/ ${c.totalEstimado}</td>
-          <td style="padding:.75rem 1rem;">${new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}</td>
-        </tr>`).join('')}</tbody>
-      </table>`
-    } catch(e) {
-      document.getElementById('lista').textContent = 'Error al cargar cotizaciones.'
-    }
-  }
+let clientes = []
+let productos = []
+
+async function init() {
+  ;[clientes, productos] = await Promise.all([
+    fetch(`${API}/api/clientes`, { headers: h }).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/productos`, { headers: h }).then(r => r.json()).catch(() => []),
+  ])
+  const sel = document.getElementById('sel-cliente')
+  clientes.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = `${c.name}${c.documentNumber?' ('+c.documentNumber+')':''}`; sel.appendChild(o) })
   load()
+}
+
+async function load() {
+  try {
+    const res = await fetch(`${API}/api/cotizaciones`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar')
+    const data = await res.json()
+    const el = document.getElementById('lista')
+    if (!data.length) { el.innerHTML = '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">No hay cotizaciones registradas.</div>'; return }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">#</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Cliente</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
+        <th style="padding:.75rem 1rem;text-align:right;">Total estimado</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Vencimiento</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Acciones</th>
+      </tr></thead>
+      <tbody>${data.map(c => {
+        const badgeBg = c.estado==='Aprobado'?'#d1fae5':c.estado==='Rechazado'?'#fee2e2':'#fef9c3'
+        const badgeClr = c.estado==='Aprobado'?'#065f46':c.estado==='Rechazado'?'#991b1b':'#854d0e'
+        return `<tr style="border-top:1px solid #e2e8f0;">
+          <td style="padding:.75rem 1rem;color:#6b7280;">${c.id}</td>
+          <td style="padding:.75rem 1rem;font-weight:600;">${c.cliente?.name ?? '—'}</td>
+          <td style="padding:.75rem 1rem;"><span style="background:${badgeBg};color:${badgeClr};padding:2px 8px;border-radius:12px;font-size:.8rem;">${c.estado}</span></td>
+          <td style="padding:.75rem 1rem;text-align:right;font-weight:600;">S/ ${Number(c.totalEstimado).toFixed(2)}</td>
+          <td style="padding:.75rem 1rem;">${new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}</td>
+          <td style="padding:.75rem 1rem;display:flex;gap:.25rem;">
+            ${c.estado==='Borrador'?`
+              <button onclick="cambiarEstado(${c.id},'Aprobado')" style="background:#d1fae5;color:#065f46;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Aprobar</button>
+              <button onclick="cambiarEstado(${c.id},'Rechazado')" style="background:#fee2e2;color:#991b1b;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Rechazar</button>`
+            :''}
+          </td>
+        </tr>`
+      }).join('')}</tbody>
+    </table>`
+  } catch(e) {
+    document.getElementById('lista').innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
+  }
+}
+
+async function cambiarEstado(id, estado) {
+  try {
+    await fetch(`${API}/api/cotizaciones/${id}/estado`, { method: 'PATCH', headers: h, body: JSON.stringify({ estado }) })
+    load()
+  } catch { alert('Error al actualizar estado') }
+}
+
+let rowCount = 0
+
+function addRow() {
+  rowCount++
+  const id = `row-${rowCount}`
+  const opts = productos.map(p => `<option value="${p.id}" data-price="${p.price}">${p.name} (S/ ${Number(p.price).toFixed(2)})</option>`).join('')
+  const div = document.createElement('div')
+  div.id = id
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 80px auto;gap:.5rem;margin-bottom:.5rem;align-items:center;'
+  div.innerHTML = `
+    <select onchange="calcTotal()" class="row-prod" style="padding:.4rem;border:1px solid #ddd;border-radius:6px;">
+      <option value="">— Producto —</option>${opts}
+    </select>
+    <input type="number" min="0.01" step="0.01" value="1" onchange="calcTotal()" onkeyup="calcTotal()" class="row-qty" placeholder="Cant." style="padding:.4rem;border:1px solid #ddd;border-radius:6px;">
+    <button type="button" onclick="removeRow('${id}')" style="background:#fee2e2;color:#991b1b;border:none;padding:.4rem .6rem;border-radius:4px;cursor:pointer;">✕</button>`
+  document.getElementById('rows-container').appendChild(div)
+  calcTotal()
+}
+
+function removeRow(id) { document.getElementById(id)?.remove(); calcTotal() }
+
+function calcTotal() {
+  let total = 0
+  document.querySelectorAll('#rows-container > div').forEach(row => {
+    const sel = row.querySelector('.row-prod')
+    const qty = parseFloat(row.querySelector('.row-qty').value) || 0
+    const opt = sel.options[sel.selectedIndex]
+    const price = parseFloat(opt?.dataset?.price || 0)
+    total += price * qty
+  })
+  document.getElementById('total-display').textContent = total.toFixed(2)
+}
+
+function openCreate() {
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('rows-container').innerHTML = ''
+  rowCount = 0
+  calcTotal()
+  document.getElementById('modal-form').reset()
+  document.getElementById('modal').style.display = 'flex'
+  addRow()
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none' }
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+
+  const detalles = []
+  let valid = true
+  document.querySelectorAll('#rows-container > div').forEach(row => {
+    const sel = row.querySelector('.row-prod')
+    const qty = parseFloat(row.querySelector('.row-qty').value) || 0
+    const opt = sel.options[sel.selectedIndex]
+    const price = parseFloat(opt?.dataset?.price || 0)
+    if (!sel.value) { valid = false; return }
+    detalles.push({ productoId: Number(sel.value), cantidad: qty, precioUnitario: price })
+  })
+
+  if (!valid || !detalles.length) {
+    document.getElementById('form-error').textContent = 'Selecciona al menos un producto válido'
+    document.getElementById('form-error').style.display = 'block'
+    btn.disabled = false; btn.textContent = 'Guardar'
+    return
+  }
+
+  const fd = new FormData(e.target)
+  const body = { clienteId: Number(fd.get('clienteId')), fechaVencimiento: fd.get('fechaVencimiento'), detalles }
+
+  try {
+    const res = await fetch(`${API}/api/cotizaciones`, { method: 'POST', headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { document.getElementById('form-error').textContent = data.error ?? 'Error al guardar'; document.getElementById('form-error').style.display = 'block'; return }
+    closeModal()
+    load()
+  } catch { document.getElementById('form-error').textContent = 'Error de conexión'; document.getElementById('form-error').style.display = 'block' }
+  finally { btn.disabled = false; btn.textContent = 'Guardar' }
+})
+
+window.openCreate = openCreate
+window.closeModal = closeModal
+window.addRow = addRow
+window.removeRow = removeRow
+window.calcTotal = calcTotal
+window.cambiarEstado = cambiarEstado
+
+init()
 </script>

@@ -5,38 +5,139 @@ import Sidebar from '../../components/Sidebar.astro'
 <App title="Sedes">
   <Sidebar slot="sidebar" />
   <div>
-    <h1 style="margin-bottom:1.5rem;">Sedes</h1>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+      <h1>Sedes</h1>
+      <button onclick="openCreate()" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">+ Nueva sede</button>
+    </div>
     <div id="sedes-list">Cargando...</div>
+  </div>
+
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:540px;max-height:90vh;overflow-y:auto;">
+      <h2 id="modal-title" style="margin-bottom:1rem;"></h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Nombre</label><input name="nombre" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Código</label><input name="codigo" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Ciudad</label><input name="ciudad" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Departamento</label><input name="departamento" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div style="grid-column:1/-1;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Dirección</label><input name="direccion" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Teléfono</label><input name="telefono" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Email</label><input name="email" type="email" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Encargado</label><input name="encargado" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Capacidad</label><input name="capacidad" type="number" value="0" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Tipo</label>
+            <select name="tipo" required style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;">
+              <option value="central">Central</option><option value="regional">Regional</option><option value="sucursal">Sucursal</option>
+            </select></div>
+          <div><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">Estado</label>
+            <select name="estado" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;">
+              <option value="activa">Activa</option><option value="inactiva">Inactiva</option>
+            </select></div>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#3b82f6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  fetch(`${API}/api/sedes`, { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => { if (!r.ok) throw new Error('Error al cargar sedes'); return r.json() })
-    .then(sedes => {
-      const el = document.getElementById('sedes-list')
-      if (!sedes.length) { el.textContent = 'No hay sedes registradas.'; return }
-      el.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
-          <thead style="background:#f1f5f9;"><tr>
-            <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
-            <th style="padding:.75rem 1rem;text-align:left;">Ciudad</th>
-            <th style="padding:.75rem 1rem;text-align:left;">Tipo</th>
-            <th style="padding:.75rem 1rem;text-align:left;">Encargado</th>
-            <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
-          </tr></thead>
-          <tbody>${sedes.map(s => `<tr style="border-top:1px solid #e2e8f0;">
-            <td style="padding:.75rem 1rem;font-weight:600;">${s.nombre}</td>
-            <td style="padding:.75rem 1rem;">${s.ciudad}, ${s.departamento}</td>
-            <td style="padding:.75rem 1rem;">${s.tipo}</td>
-            <td style="padding:.75rem 1rem;">${s.encargado ?? '—'}</td>
-            <td style="padding:.75rem 1rem;">${s.estado}</td>
-          </tr>`).join('')}</tbody>
-        </table>`
-    })
-    .catch(e => { document.getElementById('sedes-list').textContent = e.message })
+let editId = null
+
+async function load() {
+  try {
+    const res = await fetch(`${API}/api/sedes`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar sedes')
+    const sedes = await res.json()
+    const el = document.getElementById('sedes-list')
+    if (!sedes.length) { el.innerHTML = '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">No hay sedes registradas.</div>'; return }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Ciudad</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Tipo</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Encargado</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Teléfono</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
+        <th style="padding:.75rem 1rem;"></th>
+      </tr></thead>
+      <tbody>${sedes.map(s => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${s.nombre}</td>
+        <td style="padding:.75rem 1rem;">${s.ciudad}, ${s.departamento}</td>
+        <td style="padding:.75rem 1rem;">${s.tipo}</td>
+        <td style="padding:.75rem 1rem;">${s.encargado ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">${s.telefono}</td>
+        <td style="padding:.75rem 1rem;"><span style="background:${s.estado==='activa'?'#d1fae5':'#fee2e2'};color:${s.estado==='activa'?'#065f46':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${s.estado}</span></td>
+        <td style="padding:.75rem 1rem;display:flex;gap:.25rem;">
+          <button onclick="openEdit(${JSON.stringify(s).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button>
+          <button onclick="deleteSede(${s.id})" style="background:#fee2e2;color:#991b1b;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Eliminar</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`
+  } catch(e) { document.getElementById('sedes-list').innerHTML = `<div style="color:#991b1b;padding:1rem;">${e.message}</div>` }
+}
+
+function fillForm(data = {}) {
+  const f = document.getElementById('modal-form')
+  f.nombre.value = data.nombre ?? ''
+  f.codigo.value = data.codigo ?? ''
+  f.ciudad.value = data.ciudad ?? ''
+  f.departamento.value = data.departamento ?? ''
+  f.direccion.value = data.direccion ?? ''
+  f.telefono.value = data.telefono ?? ''
+  f.email.value = data.email ?? ''
+  f.encargado.value = data.encargado ?? ''
+  f.capacidad.value = data.capacidad ?? 0
+  f.tipo.value = data.tipo ?? 'central'
+  f.estado.value = data.estado ?? 'activa'
+}
+
+function openCreate() { editId = null; document.getElementById('modal-title').textContent = 'Nueva sede'; document.getElementById('form-error').style.display = 'none'; fillForm(); document.getElementById('modal').style.display = 'flex' }
+function openEdit(data) { editId = data.id; document.getElementById('modal-title').textContent = 'Editar sede'; document.getElementById('form-error').style.display = 'none'; fillForm(data); document.getElementById('modal').style.display = 'flex' }
+function closeModal() { document.getElementById('modal').style.display = 'none'; editId = null }
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  const fd = new FormData(e.target)
+  const body = {}
+  for (const [k, v] of fd.entries()) {
+    if (v === '') continue
+    body[k] = k === 'capacidad' ? Number(v) : v
+  }
+  try {
+    const url = editId ? `${API}/api/sedes/${editId}` : `${API}/api/sedes`
+    const method = editId ? 'PUT' : 'POST'
+    const res = await fetch(url, { method, headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { document.getElementById('form-error').textContent = data.error ?? 'Error al guardar'; document.getElementById('form-error').style.display = 'block'; return }
+    closeModal(); load()
+  } catch { document.getElementById('form-error').textContent = 'Error de conexión'; document.getElementById('form-error').style.display = 'block' }
+  finally { btn.disabled = false; btn.textContent = 'Guardar' }
+})
+
+async function deleteSede(id) {
+  if (!confirm('¿Eliminar esta sede?')) return
+  try {
+    await fetch(`${API}/api/sedes/${id}`, { method: 'DELETE', headers: h })
+    load()
+  } catch { alert('Error al eliminar') }
+}
+
+window.openCreate = openCreate
+window.openEdit = openEdit
+window.closeModal = closeModal
+window.deleteSede = deleteSede
+
+load()
 </script>

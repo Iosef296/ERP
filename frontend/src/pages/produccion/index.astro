@@ -6,33 +6,300 @@ import Sidebar from '../../components/Sidebar.astro'
   <Sidebar slot="sidebar" />
   <div>
     <h1 style="margin-bottom:1.5rem;">Producción</h1>
-    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
-      <button onclick="loadSection('ordenes')" style="background:#ef4444;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Órdenes</button>
-      <button onclick="loadSection('materias')" style="background:#f59e0b;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Materia prima</button>
-      <button onclick="loadSection('proveedores')" style="background:#8b5cf6;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Proveedores</button>
-      <button onclick="loadSection('proyecciones')" style="background:#06b6d4;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Proyecciones</button>
+    <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+      <button onclick="setTab('ordenes')" id="tab-ordenes" style="background:#ef4444;color:#fff;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Órdenes</button>
+      <button onclick="setTab('materias')" id="tab-materias" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Materia prima</button>
+      <button onclick="setTab('proveedores')" id="tab-proveedores" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Proveedores</button>
+      <button onclick="setTab('proyecciones')" id="tab-proyecciones" style="background:#e5e7eb;color:#374151;padding:.5rem 1.25rem;border:none;border-radius:6px;cursor:pointer;">Proyecciones</button>
     </div>
-    <div id="content">Selecciona una sección.</div>
+    <div id="content"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:2rem;border-radius:12px;width:520px;max-height:90vh;overflow-y:auto;">
+      <h2 id="modal-title" style="margin-bottom:1rem;"></h2>
+      <div id="form-error" style="display:none;background:#fee2e2;color:#991b1b;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;"></div>
+      <form id="modal-form">
+        <div id="form-fields"></div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
+          <button type="button" onclick="closeModal()" style="padding:.5rem 1rem;border:1px solid #ddd;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button type="submit" id="btn-submit" style="background:#ef4444;color:#fff;padding:.5rem 1rem;border:none;border-radius:6px;cursor:pointer;">Guardar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </App>
 
 <script>
-  const API = import.meta.env.PUBLIC_API_URL
-  const token = localStorage.getItem('token')
-  if (!token) window.location.href = '/login'
+const API = import.meta.env.PUBLIC_API_URL
+const token = localStorage.getItem('token')
+if (!token) window.location.href = '/login'
+const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  async function loadSection(section) {
-    const el = document.getElementById('content')
-    el.textContent = 'Cargando...'
-    try {
-      const res = await fetch(`${API}/api/produccion/${section}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error(`Error al cargar ${section}`)
-      const data = await res.json()
-      el.innerHTML = `<pre style="background:#fff;padding:1rem;border-radius:8px;overflow-x:auto;">${JSON.stringify(data, null, 2)}</pre>`
-    } catch (e) {
-      el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
-    }
+let currentTab = 'ordenes'
+let editId = null
+let roles = [], ordenes = [], materias = []
+
+async function init() {
+  const [r, o, m] = await Promise.all([
+    fetch(`${API}/api/roles`, { headers: h }).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/produccion/ordenes`, { headers: h }).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/produccion/materias`, { headers: h }).then(r => r.json()).catch(() => []),
+  ])
+  roles = r; ordenes = o; materias = m
+  setTab('ordenes')
+}
+
+function setTab(tab) {
+  currentTab = tab
+  document.querySelectorAll('[id^="tab-"]').forEach(b => {
+    b.style.background = '#e5e7eb'; b.style.color = '#374151'; b.style.fontWeight = 'normal'
+  })
+  const colors = { ordenes: '#ef4444', materias: '#f59e0b', proveedores: '#8b5cf6', proyecciones: '#06b6d4' }
+  const btn = document.getElementById('tab-' + tab)
+  btn.style.background = colors[tab]; btn.style.color = '#fff'; btn.style.fontWeight = '600'
+  loadSection(tab)
+}
+
+async function loadSection(section) {
+  const el = document.getElementById('content')
+  el.innerHTML = '<div style="padding:2rem;color:#6b7280;">Cargando...</div>'
+  try {
+    const res = await fetch(`${API}/api/produccion/${section}`, { headers: h })
+    if (!res.ok) throw new Error('Error al cargar')
+    const data = await res.json()
+    el.innerHTML = renderSection(section, data)
+  } catch(e) {
+    el.innerHTML = `<div style="background:#fee2e2;color:#991b1b;padding:1rem;border-radius:8px;">${e.message}</div>`
   }
-  window.loadSection = loadSection
-  loadSection('ordenes')
+}
+
+function renderSection(section, data) {
+  const btnColor = { ordenes: '#ef4444', materias: '#f59e0b', proveedores: '#8b5cf6', proyecciones: '#06b6d4' }[section]
+  const labels = { ordenes: 'Nueva orden', materias: 'Nueva materia', proveedores: 'Nuevo proveedor', proyecciones: 'Nueva proyección' }
+  let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <span style="font-weight:600;font-size:1rem;">${data.length} registros</span>
+    <button onclick="openCreate()" style="background:${btnColor};color:#fff;padding:.4rem 1rem;border:none;border-radius:6px;cursor:pointer;">${labels[section]}</button>
+  </div>`
+
+  if (!data.length) return header + '<div style="background:#fff;padding:2rem;border-radius:8px;text-align:center;color:#6b7280;">Sin registros.</div>'
+
+  let table = ''
+  if (section === 'ordenes') {
+    table = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Tipo producto</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Estado</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Cantidad</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Inicio</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Fin</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Responsable</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Rol</th>
+        <th style="padding:.75rem 1rem;"></th>
+      </tr></thead>
+      <tbody>${data.map(o => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${o.tipoProducto}</td>
+        <td style="padding:.75rem 1rem;"><span style="background:${o.estado==='Completado'?'#d1fae5':o.estado==='En proceso'?'#fef9c3':'#f3f4f6'};color:${o.estado==='Completado'?'#065f46':o.estado==='En proceso'?'#854d0e':'#374151'};padding:2px 8px;border-radius:12px;font-size:.8rem;">${o.estado}</span></td>
+        <td style="padding:.75rem 1rem;">${o.cantidad}</td>
+        <td style="padding:.75rem 1rem;">${o.fechaInicio?.slice(0,10)}</td>
+        <td style="padding:.75rem 1rem;">${o.fechaFinal?.slice(0,10)}</td>
+        <td style="padding:.75rem 1rem;">${o.responsable ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">${o.role?.nombre ?? '—'}</td>
+        <td style="padding:.75rem 1rem;display:flex;gap:.25rem;">
+          <button onclick="openEdit(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button>
+          <button onclick="deleteItem('ordenes',${o.id})" style="background:#fee2e2;color:#991b1b;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Eliminar</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`
+  } else if (section === 'materias') {
+    table = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Unidad medida</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Stock</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Descripción</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Proveedores</th>
+        <th style="padding:.75rem 1rem;"></th>
+      </tr></thead>
+      <tbody>${data.map(m => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${m.nombre}</td>
+        <td style="padding:.75rem 1rem;">${m.unidadMedida}</td>
+        <td style="padding:.75rem 1rem;">${m.stock}</td>
+        <td style="padding:.75rem 1rem;color:#6b7280;font-size:.85rem;">${m.descripcion ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">${m.proveedores?.length ?? 0}</td>
+        <td style="padding:.75rem 1rem;">
+          <button onclick="openEdit(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`
+  } else if (section === 'proveedores') {
+    table = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+        <th style="padding:.75rem 1rem;text-align:left;">RUC</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Rubro</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Teléfono</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Dirección</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Materia</th>
+        <th style="padding:.75rem 1rem;"></th>
+      </tr></thead>
+      <tbody>${data.map(p => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${p.nombre}</td>
+        <td style="padding:.75rem 1rem;">${p.ruc}</td>
+        <td style="padding:.75rem 1rem;">${p.rubro}</td>
+        <td style="padding:.75rem 1rem;">${p.telefono}</td>
+        <td style="padding:.75rem 1rem;font-size:.85rem;">${p.direccion}</td>
+        <td style="padding:.75rem 1rem;">${p.materia?.nombre ?? '—'}</td>
+        <td style="padding:.75rem 1rem;">
+          <button onclick="openEdit(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="background:#dbeafe;color:#1d4ed8;border:none;padding:.25rem .5rem;border-radius:4px;cursor:pointer;font-size:.8rem;">Editar</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`
+  } else if (section === 'proyecciones') {
+    table = `<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+      <thead style="background:#f1f5f9;"><tr>
+        <th style="padding:.75rem 1rem;text-align:left;">Nombre</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Tipo</th>
+        <th style="padding:.75rem 1rem;text-align:left;">Descripción</th>
+      </tr></thead>
+      <tbody>${data.map(p => `<tr style="border-top:1px solid #e2e8f0;">
+        <td style="padding:.75rem 1rem;font-weight:600;">${p.nombre}</td>
+        <td style="padding:.75rem 1rem;">${p.tipo}</td>
+        <td style="padding:.75rem 1rem;color:#6b7280;font-size:.85rem;">${p.descripcion}</td>
+      </tr>`).join('')}</tbody></table>`
+  }
+  return header + table
+}
+
+function getFields() {
+  if (currentTab === 'ordenes') return [
+    { key: 'tipoProducto', label: 'Tipo de producto', required: true },
+    { key: 'cantidad', label: 'Cantidad', type: 'number', required: true },
+    { key: 'estado', label: 'Estado', type: 'select', options: ['Pendiente','En proceso','Completado'], required: true },
+    { key: 'fechaInicio', label: 'Fecha inicio', type: 'date', required: true },
+    { key: 'fechaFinal', label: 'Fecha final', type: 'date', required: true },
+    { key: 'responsable', label: 'Responsable' },
+    { key: 'descripcion', label: 'Descripción' },
+    { key: 'rolId', label: 'Rol', type: 'select', required: true,
+      options: roles.map(r => ({ value: r.id, label: r.nombre })) },
+  ]
+  if (currentTab === 'materias') return [
+    { key: 'nombre', label: 'Nombre', required: true },
+    { key: 'descripcion', label: 'Descripción', required: true },
+    { key: 'unidadMedida', label: 'Unidad de medida', required: true },
+    { key: 'stock', label: 'Stock', type: 'number', required: true },
+    { key: 'ordenId', label: 'Orden de producción', type: 'select', required: true,
+      options: ordenes.map(o => ({ value: o.id, label: `#${o.id} ${o.tipoProducto}` })) },
+  ]
+  if (currentTab === 'proveedores') return [
+    { key: 'nombre', label: 'Nombre', required: true },
+    { key: 'ruc', label: 'RUC', required: true },
+    { key: 'rubro', label: 'Rubro', required: true },
+    { key: 'telefono', label: 'Teléfono', required: true },
+    { key: 'direccion', label: 'Dirección', required: true },
+    { key: 'materiaId', label: 'Materia prima (opcional)', type: 'select',
+      options: [{ value: '', label: '— Ninguna —' }, ...materias.map(m => ({ value: m.id, label: m.nombre }))] },
+  ]
+  if (currentTab === 'proyecciones') return [
+    { key: 'nombre', label: 'Nombre', required: true },
+    { key: 'tipo', label: 'Tipo', required: true },
+    { key: 'descripcion', label: 'Descripción', required: true },
+  ]
+  return []
+}
+
+function renderField(f, val = '') {
+  const style = 'width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;'
+  if (f.type === 'select') {
+    const opts = Array.isArray(f.options) && typeof f.options[0] === 'object'
+      ? f.options.map(o => `<option value="${o.value}" ${String(val)===String(o.value)?'selected':''}>${o.label}</option>`).join('')
+      : f.options.map(o => `<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')
+    return `<select name="${f.key}" ${f.required?'required':''} style="${style}">${opts}</select>`
+  }
+  return `<input name="${f.key}" type="${f.type??'text'}" ${f.required?'required':''} value="${val}" style="${style}">`
+}
+
+function openCreate() {
+  editId = null
+  const titles = { ordenes: 'Nueva orden', materias: 'Nueva materia prima', proveedores: 'Nuevo proveedor', proyecciones: 'Nueva proyección' }
+  document.getElementById('modal-title').textContent = titles[currentTab]
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getFields().map(f =>
+    `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f)}</div>`
+  ).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function openEdit(data) {
+  editId = data.id
+  const titles = { ordenes: 'Editar orden', materias: 'Editar materia prima', proveedores: 'Editar proveedor', proyecciones: 'Editar proyección' }
+  document.getElementById('modal-title').textContent = titles[currentTab]
+  document.getElementById('form-error').style.display = 'none'
+  document.getElementById('form-fields').innerHTML = getFields().map(f => {
+    let val = data[f.key] ?? ''
+    if (f.type === 'date' && val) val = String(val).slice(0,10)
+    return `<div style="margin-bottom:.75rem;"><label style="display:block;font-size:.85rem;margin-bottom:.25rem;">${f.label}</label>${renderField(f, val)}</div>`
+  }).join('')
+  document.getElementById('modal').style.display = 'flex'
+}
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none'
+  editId = null
+}
+
+document.getElementById('modal-form').addEventListener('submit', async e => {
+  e.preventDefault()
+  const btn = document.getElementById('btn-submit')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  const fd = new FormData(e.target)
+  const body = {}
+  for (const [k, v] of fd.entries()) {
+    if (v === '') continue
+    const f = getFields().find(x => x.key === k)
+    body[k] = (f?.type === 'number' || k === 'rolId' || k === 'ordenId' || k === 'materiaId') ? Number(v) : v
+  }
+
+  try {
+    let url = `${API}/api/produccion/${currentTab}`
+    let method = 'POST'
+    if (editId) { url += `/${editId}`; method = 'PUT' }
+    const res = await fetch(url, { method, headers: h, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { showErr(data.error ?? 'Error al guardar'); return }
+
+    if (currentTab === 'ordenes') {
+      ordenes = await fetch(`${API}/api/produccion/ordenes`, { headers: h }).then(r => r.json()).catch(() => ordenes)
+    } else if (currentTab === 'materias') {
+      materias = await fetch(`${API}/api/produccion/materias`, { headers: h }).then(r => r.json()).catch(() => materias)
+    }
+    closeModal()
+    loadSection(currentTab)
+  } catch {
+    showErr('Error de conexión')
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar'
+  }
+})
+
+async function deleteItem(section, id) {
+  if (!confirm('¿Eliminar este registro?')) return
+  try {
+    await fetch(`${API}/api/produccion/${section}/${id}`, { method: 'DELETE', headers: h })
+    loadSection(currentTab)
+  } catch(e) {
+    alert('Error al eliminar')
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('form-error')
+  el.textContent = msg; el.style.display = 'block'
+}
+
+window.setTab = setTab
+window.openCreate = openCreate
+window.openEdit = openEdit
+window.closeModal = closeModal
+window.deleteItem = deleteItem
+
+init()
 </script>
